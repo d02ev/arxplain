@@ -1,0 +1,17 @@
+[project]
+name = "arxplain"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "d02ev", email = "vikramadityapratapsingh98@gmail.com" }
+]
+requires-python = ">=3.14.7"
+dependencies = []
+
+[project.scripts]
+arxplain = "arxplain:main"
+
+[build-system]
+requires = ["uv_build>=0.12.13,<0.13.0"]
+build-backend = "uv_build"
