@@ -1,13 +1,18 @@
 [project]
 name = "arxplain"
 version = "0.1.0"
-description = "Add your description here"
+description = "Explain a technological research paper at the reader's own level — mathematics, experimentation, keywords, frameworks, language and tools adapted per user profile"
 readme = "README.md"
 authors = [
     { name = "d02ev", email = "vikramadityapratapsingh98@gmail.com" }
 ]
-requires-python = ">=3.14.7"
+requires-python = ">=3.11"
 dependencies = []
+
+[project.optional-dependencies]
+pdf = ["pypdf>=4.0"]
+search = ["ddgs>=9.0"]
+dev = ["pytest>=8.0"]
 
 [project.scripts]
 arxplain = "arxplain:main"
@@ -15,3 +20,6 @@ arxplain = "arxplain:main"
 [build-system]
 requires = ["uv_build>=0.12.13,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,15 @@
+{
+  "name": "learner",
+  "goal": "understand and implement this paper",
+  "levels": {
+    "mathematics": 1,
+    "experimentation": 2,
+    "keywords": 1,
+    "frameworks": 2,
+    "language": 3,
+    "tools": 1,
+    "domain": 1,
+    "theory": 1
+  },
+  "interests": []
+}

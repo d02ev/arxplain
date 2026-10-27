@@ -1,6 +1,9 @@
 ### dotenv ###
 .env.development
 .env
+.env.*
+!.env.example
+.arxplain-cache/
 
 ### Linux ###
 *~
