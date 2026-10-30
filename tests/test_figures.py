@@ -2,7 +2,7 @@ from arxplain.ingestion import parse_html_document, paper_from_text
 from arxplain.llm import MockLLM
 from arxplain.models import Figure, UserProfile
 from arxplain.pipeline import explain_paper
-from arxplain.render import render_html, render_markdown
+from arxplain.render import render_html
 
 HTML = """<html><body>
 <h2>Abstract</h2><p>We propose a model architecture in this work.</p>
@@ -40,7 +40,6 @@ def test_figures_appear_in_their_section_in_both_formats():
     model = next(s for s in result.paper_explanation
                  if s.section_title == "1. Model")
     assert model.figures and model.figures[0].label == "Figure 1"
-    html, md = render_html(result), render_markdown(result)
+    html = render_html(result)
     assert '<img src="https://example.com/fig1.png"' in html
     assert "Figure 1: The model architecture." in html
-    assert "![Figure 1: The model architecture.](https://example.com/fig1.png)" in md

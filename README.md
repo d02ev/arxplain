@@ -11,13 +11,13 @@ adapts dimension by dimension: from-zero with an analogy where you have
 a large gap, a guided pass where you are close, and a one-line recap
 where you already know it.
 
-The interface is a **CLI**. The explanation is written to a **`.md`**
-file or a standalone **`.html`** page you open in a browser.
+The interface is a **CLI**. The explanation is written to a standalone
+**`.html`** page you open in a browser.
 
 ```
 paper ──▶ Ingestion ──▶ Concept extraction ──▶ Gap analysis (paper vs. you)
                                                       │
-        Explanation (.md / .html) ◀── Explainer ◀── Planner (learning path)
+        Explanation (.html) ◀── Explainer ◀── Planner (learning path)
                                                       │
                                                  Quiz (adaptive check)
 ```
@@ -36,7 +36,7 @@ supported provider is the **Meta Model API** (Muse Spark):
 ```bash
 cp .env.example .env   # then put your key in .env — it is gitignored
 # .env contains: ARXPLAIN_LLM=meta, MODEL_API_KEY=..., ARXPLAIN_MODEL=muse-spark-1.3
-arxplain explain 1706.03762 --profile me.json --llm meta --format html
+arxplain explain 1706.03762 --profile me.json --llm meta
 ```
 
 Other providers work the same way (`openai` / `anthropic` / `ollama`).
@@ -71,8 +71,8 @@ arxplain profile-paper --demo --ratings "attention=2,PyTorch=8" --save profile.j
 #    confidence is low (<=4/10, or a real gap) the explanation carries
 #    inline article/blog links, plus a Further Reading section. Links
 #    saved in profile.json are reused — no new searches, no new cost.
-arxplain explain 1706.03762 --profile profile.json --llm meta --format html
-arxplain explain paper.pdf   --profile profile.json --format md -o paper.md
+arxplain explain 1706.03762 --profile profile.json --llm meta
+arxplain explain paper.pdf   --profile profile.json -o paper.html
 ```
 
 Search is Tavily (`TAVILY_API_KEY`) when a key is present, otherwise
@@ -83,8 +83,8 @@ is capped (`--max-searches 16`) and cached, like LLM calls.
 
 ```bash
 arxplain profile --save me.json        # dimension-level template (0=novice .. 4=expert)
-arxplain explain --demo --level beginner --format both
-arxplain explain 1706.03762 --diagnose --format html   # quiz sets coarse levels
+arxplain explain --demo --level beginner
+arxplain explain 1706.03762 --diagnose   # quiz sets coarse levels
 arxplain quiz 1706.03762 --profile me.json              # check understanding after
 ```
 
@@ -129,5 +129,5 @@ Everything is done through the `arxplain` command shown above.
 ## Development
 
 ```bash
-uv run pytest     # 9 tests: extraction, adaptation, renderers, quiz, CLI
+uv run pytest     # test suite: extraction, adaptation, rendering, quiz, CLI
 ```

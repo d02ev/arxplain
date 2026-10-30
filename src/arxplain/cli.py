@@ -1,7 +1,7 @@
 """ArXplain command line.
 
-  arxplain explain 1706.03762 --format html
-  arxplain explain paper.pdf --profile me.json --format md -o out.md
+  arxplain explain 1706.03762
+  arxplain explain paper.pdf --profile me.json -o out.html
   arxplain explain --demo --level beginner
   arxplain diagnose --save me.json
   arxplain quiz 1706.03762 --profile me.json
@@ -22,7 +22,7 @@ from .models import Dimension, Level, Paper, Topic, UserProfile
 from .profiler import ProfilerAgent
 from .search import SearchError, get_search
 from .pipeline import ArXplainPipeline
-from .render import render_html, render_markdown
+from .render import render_html
 
 DEMO_TEXT = """Attention Is All You Need
 
@@ -165,15 +165,12 @@ def cmd_explain(args) -> int:
         llm, llm_mode=args.llm_mode, search=search,
         max_resource_searches=args.max_resource_searches,
         max_llm_concepts=args.max_llm_concepts).run(paper, profile)
-    fmt = args.format
     slug = re.sub(r"[^a-z0-9]+", "-", paper.title.lower()).strip("-")[:48] or "paper"
-    written = []
-    for f in (["md", "html"] if fmt == "both" else [fmt]):
-        content = render_markdown(result) if f == "md" else render_html(result)
-        out = Path(args.output) if args.output and fmt != "both" else \
-            Path(f"{slug}.explained.{f}")
-        out.write_text(content, encoding="utf-8")
-        written.append(str(out))
+    out = Path(args.output) if args.output else Path(f"{slug}.explained.html")
+    if out.suffix.lower() != ".html":
+        out = out.with_suffix(".html")
+    out.write_text(render_html(result), encoding="utf-8")
+    written = [str(out)]
     print(f"Paper : {paper.title} ({len(paper.concepts)} concepts, "
           f"{len(paper.sections)} sections)")
     print(f"For   : {profile.name} — "
@@ -186,7 +183,7 @@ def cmd_explain(args) -> int:
           f"paid_calls={u.get('calls', 0)} cache_hits={u.get('cache_hits', 0)} "
           f"blocked={u.get('blocked', 0)} est_tokens={u.get('est_total_tokens', 0)}")
     print("Wrote : " + ", ".join(written))
-    print("\nOpen the file above in a browser (html) or any Markdown reader (md).")
+    print("\nOpen the file above in your browser.")
     if args.quiz:
         _run_quiz(paper, profile, count=5)
     return 0
@@ -307,8 +304,7 @@ def cmd_profile_paper(args) -> int:
     low = [t.name for t in topics if t.low_confidence]
     print(f"\nSaved : {out}  ({rated}/{len(topics)} topics rated"
           + (f"; low confidence: {', '.join(low)}" if low else "") + ")")
-    print(f"Next  : arxplain explain {args.paper or '--demo'} --profile {out} "
-          "--format html")
+    print(f"Next  : arxplain explain {args.paper or '--demo'} --profile {out}")
     return 0
 
 
@@ -352,14 +348,12 @@ def build_parser() -> argparse.ArgumentParser:
                     "are each adapted to what you already know.")
     sub = ap.add_subparsers(dest="command", required=True)
 
-    ex = sub.add_parser("explain", help="explain a paper to .md or .html")
+    ex = sub.add_parser("explain", help="explain a paper to an .html file")
     ex.add_argument("paper", nargs="?", default=None,
                     help="arXiv id/URL, PDF/.txt/.md path, or URL")
     ex.add_argument("--demo", action="store_true",
                     help="explain the bundled demo paper (Attention Is All You Need)")
-    ex.add_argument("--format", choices=["md", "html", "both"], default="md",
-                    help="explanation output format (default: md)")
-    ex.add_argument("-o", "--output", default=None, help="output file path")
+    ex.add_argument("-o", "--output", default=None, help="output .html file path")
     ex.add_argument("--llm", default=None,
                     help="mock|meta|openai|anthropic|ollama (default: ARXPLAIN_LLM or mock)")
     ex.add_argument("--llm-mode", choices=["off", "economy", "quality"],

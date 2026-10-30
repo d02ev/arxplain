@@ -7,7 +7,7 @@ from arxplain.ingestion import normalize_arxiv_id, paper_from_text
 from arxplain.llm import MockLLM, get_llm
 from arxplain.models import Dimension, Level, UserProfile
 from arxplain.pipeline import explain_paper
-from arxplain.render import render_html, render_markdown
+from arxplain.render import render_html
 
 
 def demo_paper():
@@ -42,9 +42,8 @@ def test_explanation_depth_adapts_to_profile():
 def test_renderers_contain_title_and_profile():
     profile = UserProfile(name="Ada")
     result = explain_paper(demo_paper(), profile, llm=MockLLM())
-    md, html = render_markdown(result), render_html(result)
-    assert "Attention Is All You Need" in md and "Ada" in md
-    assert "<!DOCTYPE html>" in html and "Attention Is All You Need" in html
+    html = render_html(result)
+    assert "<!DOCTYPE html>" in html and "ADA" in html and "Attention Is All You Need" in html
     assert "Your learning path" in html and "Gaps at a glance" in html
 
 
@@ -87,9 +86,9 @@ def test_mock_llm_is_default_and_offline():
 
 def test_cli_explain_writes_md_and_html(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    assert main(["explain", "--demo", "--format", "both", "--level", "beginner",
+    assert main(["explain", "--demo", "--level", "beginner",
                  "--no-resources"]) == 0
     outs = list(tmp_path.glob("*.explained.*"))
-    assert {p.suffix for p in outs} == {".md", ".html"}
-    md = next(p for p in outs if p.suffix == ".md").read_text()
-    assert "Check yourself" in md or "You know this" in md
+    assert {p.suffix for p in outs} == {".html"}  # HTML is the only output
+    html = outs[0].read_text()
+    assert "Check yourself" in html or "You know this" in html

@@ -4,7 +4,7 @@ from arxplain.ingestion import paper_from_text
 from arxplain.llm import MockLLM
 from arxplain.models import Dimension, Resource, Topic, UserProfile
 from arxplain.pipeline import explain_paper
-from arxplain.render import render_html, render_markdown
+from arxplain.render import render_html
 
 TEXT = """Attention Study
 
@@ -35,7 +35,7 @@ def result_with_shared_link():
 
 def test_no_link_repeats_anywhere_in_either_format():
     result = result_with_shared_link()
-    for out in (render_markdown(result), render_html(result)):
+    for out in (render_html(result),):
         urls = re.findall(r"https://example\.com/[a-z0-9]+", out)
         assert urls, "expected the weak topic's links in Resources"
         assert len(urls) == len(set(urls)), f"repeated links: {urls}"
@@ -63,6 +63,3 @@ def test_section_topics_jump_to_their_sidebar_entry():
     assert "href=\"#res-scaled-dot-product-attention-softmax\"" in html
     # ...and that entry exists exactly once, holding the external links
     assert html.count("id='res-scaled-dot-product-attention-softmax'") == 1
-    md = render_markdown(result)
-    assert "## Resources" in md
-    assert md.count("https://example.com/attn2") == 1

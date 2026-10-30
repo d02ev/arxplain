@@ -7,7 +7,7 @@ from arxplain.models import (Dimension, Resource, Topic, UserProfile,
                              familiarity_to_level)
 from arxplain.pipeline import explain_paper
 from arxplain.profiler import ProfilerAgent, heuristic_topics
-from arxplain.render import render_html, render_markdown
+from arxplain.render import render_html
 from arxplain.search import BaseSearch, CachedSearch, NoSearch
 
 
@@ -70,10 +70,8 @@ def test_topic_rating_drives_gap_and_links_in_output():
     attn = next(e for e in result.explanations
                 if "attention" in e.concept_name.lower())
     assert attn.familiarity == 2 and attn.resources  # weak -> linked
-    md, html = render_markdown(result), render_html(result)
-    # each link appears exactly once in the whole document (no repeats in
-    # Background topics / Further reading once a section has shown it)
-    assert md.count("https://example.com/attn") == 1
+    html = render_html(result)
+    # each link appears exactly once in the whole document (in the sidebar)
     assert html.count("https://example.com/attn") == 1
     assert "Topics you rated" in html
     # round-trip through profile.json format keeps topics + resources
@@ -93,5 +91,5 @@ def test_cli_profile_paper_writes_profile_json(tmp_path, monkeypatch):
     assert any(t["requirement"] == "hard" for t in data["topics"])
     # and explain consumes it without any new profiling
     assert main(["explain", "--demo", "--profile", "profile.json",
-                 "--format", "md", "-o", "out.md", "--no-resources"]) == 0
-    assert "Topics you rated" in (tmp_path / "out.md").read_text()
+                 "-o", "out.html", "--no-resources"]) == 0
+    assert "Topics you rated" in (tmp_path / "out.html").read_text()

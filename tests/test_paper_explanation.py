@@ -3,7 +3,7 @@ from arxplain.ingestion import paper_from_text
 from arxplain.llm import MockLLM
 from arxplain.models import Dimension, Resource, Topic, UserProfile
 from arxplain.pipeline import explain_paper
-from arxplain.render import render_html, render_markdown
+from arxplain.render import render_html
 
 
 def profile_with_weak_attention():
@@ -35,7 +35,7 @@ def test_user_facing_files_hide_backend_trace():
     result = explain_paper(paper_from_text(DEMO_TEXT, source="demo"),
                            profile_with_weak_attention(), llm=MockLLM())
     assert result.trace  # trace still exists as backend metadata
-    for out in (render_markdown(result), render_html(result)):
+    for out in (render_html(result),):
         assert "How this explanation was built" not in out
         assert "gap-analysis" not in out and "[profiler]" not in out
         assert "The paper, explained section by section" in out

@@ -2,7 +2,7 @@ from arxplain.ingestion import paper_from_text, parse_arxiv_html
 from arxplain.llm import MockLLM
 from arxplain.models import Dimension, Resource, Topic, UserProfile
 from arxplain.pipeline import explain_paper
-from arxplain.render import render_html, render_markdown
+from arxplain.render import render_html
 
 FULL = """Attention Study
 
@@ -70,14 +70,9 @@ def test_hard_requirements_live_inside_their_section_with_links():
                       if s.section_title == "1. Background")
     assert any(t.name.startswith("Scaled dot-product")
                for t in background.hard_requirements)
-    md = render_markdown(result)
-    seg = md.split("### 1. Background")[1].split("###")[0]
-    assert "Hard requirements to understand this section" in seg
-    # the topic in the section points to Resources; the external link
-    # itself lives once, in the Resources list/sidebar
-    assert "(#resources)" in seg and "example.com/attn" not in seg
-    assert "https://example.com/attn" in md.split("## Resources")[1]
     html = render_html(result)
     assert "Hard requirements to understand this section" in html
-    assert "href=\"#res-" in html.split("1. Background")[1].split("</div>")[0] \
-        or "href=\"#res-" in html
+    main, sidebar = html.split("<aside class='resources'")
+    assert "example.com/attn" not in main  # external links only in sidebar
+    assert "https://example.com/attn" in sidebar
+    assert "href=\"#res-" in main

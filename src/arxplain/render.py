@@ -1,4 +1,4 @@
-"""Render an ExplainResult to Markdown or a standalone HTML page."""
+"""Render an ExplainResult to a standalone HTML page (the only output)."""
 from __future__ import annotations
 
 import html as _html
@@ -80,113 +80,6 @@ def _resource_index(result: ExplainResult) -> _ResourceIndex:
     for e in result.explanations:
         idx.add(e.concept_name, e.resources)
     return idx
-
-
-def render_markdown(result: ExplainResult) -> str:
-    p, prof = result.paper, result.profile
-    lines: list[str] = [f"# {p.title}", ""]
-    if p.authors:
-        lines.append(f"*{', '.join(p.authors)}*  ")
-    lines.append(f"Source: {p.source} {p.source_id}  ")
-    lines.append(f"Explained for: **{prof.name}**"
-                 + (f" — goal: {prof.goal}" if prof.goal else ""))
-    lines += ["", "## Your profile", "",
-              "| Dimension | Your level |", "|---|---|"]
-    for dim in Dimension:
-        lines.append(f"| {dim.label} | {Level.from_any(prof.level(dim)).label} |")
-    if prof.topics:
-        lines += ["", "### Topics you rated (1–10)", "",
-                  "| Topic | Requirement | Your rating |", "|---|---|---|"]
-        for t in prof.topics:
-            req = "Hard Requirement" if t.is_hard else "Good To Know (Optional)"
-            rating = str(t.familiarity) if t.familiarity is not None else "—"
-            lines.append(f"| {t.name} | {req} | {rating}/10 |")
-    lines += ["", "## In one paragraph", "", result.summary, ""]
-    idx = _resource_index(result)
-    if result.paper_explanation:
-        lines += ["## The paper, explained section by section",
-                  "_What the authors actually say, in plain language, slowed "
-                  "down where your ratings are low and brief where they are high. "
-                  "Topics under a section link to the Resources list at the end, "
-                  "where every external link lives once._", ""]
-        for s in result.paper_explanation:
-            lines += [f"### {s.section_title}", "", s.body, ""]
-            for f in s.figures:
-                cap = f.caption or f.alt or f.label
-                lines += [f"![{cap}]({f.src})", "", f"*{cap}*" if cap else "", ""]
-            if s.hard_requirements:
-                lines += ["**Hard requirements to understand this section:**", ""]
-                for t in s.hard_requirements:
-                    status = (f"you rated this {t.familiarity}/10"
-                              if t.familiarity is not None
-                              else "not rated in your profile")
-                    entry = idx.entry_for(t.name)
-                    name = (f"[{t.name}](#resources)" if entry
-                            else t.name)
-                    lines.append(f"- **{name}** — {status}"
-                                 + (" · resources at the end ↓" if entry else ""))
-                lines.append("")
-    if result.plan:
-        lines += ["", "## Your learning path",
-                  f"_{result.plan.overview} (~{result.plan.estimated_minutes} min)_", ""]
-        for s in result.plan.steps:
-            lines.append(f"{s.order}. **{s.title}** "
-                         f"[{s.dimension.label} · {_DEPTH_BADGE.get(s.target_depth, s.target_depth)}] — {s.why}")
-    lines += ["", "## Background topics, explained at your level",
-              "_The ideas the paper leans on, in the order worth learning them. "
-              "Use these, and the links, when a section above feels shaky._", ""]
-    by_dim: dict[Dimension, list] = {}
-    for e in result.explanations:
-        by_dim.setdefault(e.dimension, []).append(e)
-    gap_by_name = {g.concept.name: g for g in result.gaps}
-    for dim, exps in by_dim.items():
-        lines += [f"### {dim.label}", ""]
-        for e in exps:
-            g = gap_by_name.get(e.concept_name)
-            need = (f"needs {Level.from_any(g.concept.required_level).label}, "
-                    f"you: {Level.from_any(g.user_level).label}"
-                    if g else "")
-            lines.append(f"#### {e.title}  ·  {_DEPTH_BADGE.get(e.depth, e.depth)}"
-                         + (f"  ·  {need}" if need else ""))
-            lines += ["", e.body]
-            if e.analogy:
-                lines += ["", f"> **Picture it:** {e.analogy}"]
-            if e.example:
-                lines += ["", f"_{e.example}_"]
-            if e.check_question:
-                lines += ["", f"**Check yourself:** {e.check_question}"]
-            entry = idx.entry_for(e.concept_name)
-            if entry:
-                fam = (f" — you rated this {e.familiarity}/10"
-                       if e.familiarity is not None else "")
-                lines += ["", f"**Resources for this topic:** "
-                          f"[see Resources](#resources){fam}"]
-            lines.append("")
-    if idx.entries:
-        lines += ["## Resources", "",
-                  "_Every external link in this document, grouped by topic. "
-                  "Click a topic under any section above to jump here in the "
-                  "HTML version._", ""]
-        for entry in idx.entries:
-            lines += [f"### {entry['name']}", ""]
-            for r in entry["resources"]:
-                lines.append(f"- [{r.title}]({r.url})")
-            lines.append("")
-    lines += ["## Gaps at a glance", "",
-              "| Concept | Dimension | Needs | You | Gap |", "|---|---|---|---|---|"]
-    for g in result.gaps:
-        lines.append(f"| {g.concept.name} | {g.concept.dimension.label} | "
-                     f"{Level.from_any(g.concept.required_level).label} | "
-                     f"{Level.from_any(g.user_level).label} | {g.severity} |")
-    _u = result.llm_usage or {}
-    lines += ["", "---",
-              f"_LLM: provider={result.llm_provider}, "
-              f"{_u.get('calls', 0)} paid call(s), "
-              f"{_u.get('cache_hits', 0)} cache hit(s), "
-              f"~{_u.get('est_total_tokens', 0)} est. tokens._", ""]
-    lines += ["", "---", "_Generated by ArXplain — explanations adapt to the "
-              "profile above. Re-run with a different `--profile` to change depth._", ""]
-    return "\n".join(lines)
 
 
 _CSS = """
