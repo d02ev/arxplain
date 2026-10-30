@@ -29,6 +29,30 @@ def test_context_is_the_papers_own_passage():
     assert "Transformer" in ctx or "attention" in ctx.lower()
 
 
+GARBLED = """Study of Things
+
+Abstract
+We propose a clear approach in this paper for sequence modelling tasks.
+
+1. Method
+The value $i$ ii denotes the position [1, 2, 9] in $d_{k}$ dkd_{k} terms.
+Scaled dot-product attention lets each position attend to all positions
+in the previous layer, which is how the model mixes information [31].
+We compute the dot products of queries with keys [4, 5] in parallel.
+"""
+
+
+def test_context_avoids_citation_and_formula_garble():
+    from arxplain.profiler import clean_snippet, find_context as fc
+    paper = paper_from_text(GARBLED, source="text")
+    ctx = fc(paper, "Scaled dot-product attention & softmax")
+    assert "attend to all positions" in ctx  # explanatory sentence wins
+    assert "[31]" not in ctx and "[1, 2, 9]" not in ctx
+    assert "dkd" not in ctx and "$i$ ii" not in ctx
+    assert clean_snippet("scores $d_{k}$ dkd_{k} from [1, 2, 9] papers") == \
+        "scores $d_k$ from papers"
+
+
 def test_every_topic_gets_context_and_self_check_offline():
     topics, _ = ProfilerAgent(MockLLM(), NoSearch()).run(
         paper_from_text(DEMO_TEXT, source="demo"))

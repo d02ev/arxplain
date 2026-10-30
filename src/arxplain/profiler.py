@@ -47,22 +47,115 @@ def _parse_topic_items(raw: str) -> list[dict]:
     return items
 
 
-def find_context(text: str, name: str, *, window: int = 300) -> str:
-    """The passage of THIS paper where a topic appears (for the prompt)."""
-    low = text.lower()
+def _latex_readable(latex: str) -> str:
+    """\\sqrt{d_{k}} -> sqrt(d_k); \\mathbf{z} -> z; d_{v} -> d_v."""
+    s = latex
+    s = re.sub(r"\\(sqrt|frac|mathbf|mathrm|text|left|right)\b", r"\1", s)
+    s = s.replace("\\", "")
+    s = re.sub(r"[_^]\{([^{}]+)\}", r"_\1", s)
+    s = s.replace("{", "").replace("}", "")
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def clean_snippet(text: str) -> str:
+    """Make a paper fragment readable for a self-rating prompt.
+
+    Removes citation markers ([1, 2, 9]), turns $...$ LaTeX into plain
+    readable notation, and drops the duplicated plain-text garble that
+    MathML leaves right after a formula ($d_{k}$ dkd_{k} -> $d_k$).
+    """
+    s = re.sub(r"\s+", " ", text or "").strip()
+    s = re.sub(r"\[(?:\d+\s*(?:,|;|\-)\s*)+\d+\]|\[\d+\]", "", s)
+    s = re.sub(r"\(cid:\d+\)", "", s)
+
+    def _math(m: re.Match) -> str:
+        readable = _latex_readable(m.group(1))
+        return f"${readable}$" if readable else ""
+
+    s = re.sub(r"\$([^$]{1,120})\$", _math, s)
+    # Drop a token right after $...$ that is just the same symbols
+    # repeated without notation (the MathML text leak: $d_k$ dkd_{k}).
+    # A real following word (e.g. "$Q$ queries") is kept: its letters
+    # are not a subset of the formula's symbols.
+    def _dedup(m: re.Match) -> str:
+        inner = re.sub(r"[^a-z0-9]", "", m.group(1).lower())
+        leak = re.sub(r"[^a-z0-9]", "", m.group(2).lower())
+        if (inner and leak.startswith(inner)
+                and set(leak) <= set(inner) and len(leak) <= 2 * len(inner)):
+            return f"${m.group(1)}$"
+        return m.group(0)
+
+    s = re.sub(r"\$([^$]+)\$\s*([A-Za-z0-9_]+(?:_\{[^{}]+\}|\{[^{}]+\})?)", _dedup, s)
+    s = re.sub(r"\s+", " ", s).strip(" ,;")
+    return s
+
+
+_EXPLAINY = ("propose", "introduce", "use", "using", "compute", "defined",
+             "consists", "consist", "means", "allow", "improve", "based on",
+             "approach", "method", "called", "known as", "in which", "where")
+
+
+def _sentence_score(sentence: str, phrase: str, tokens: list[str]) -> float:
+    low = sentence.lower()
+    if phrase and phrase in low:
+        score = 5.0
+    else:
+        score = float(sum(1 for w in tokens if w in low))
+        if score < 1:
+            return -1.0
+    if not 80 <= len(sentence) <= 340:
+        score -= 1.5 if len(sentence) < 80 else 1.0
+    score -= 2.0 * sentence.count("$")
+    letters = sum(c.isalpha() or c.isspace() for c in sentence)
+    if sentence and letters / len(sentence) < 0.62:  # symbol/number soup
+        score -= 3.0
+    if low.startswith(("figure", "table", "equation")):
+        score -= 2.0
+    score += 0.7 * sum(1 for w in _EXPLAINY if w in low)
+    score -= 1.0 * len(re.findall(r"\b\d+\.\d+\b", sentence))
+    return score
+
+
+def find_context(source, name: str, *, window: int = 300) -> str:
+    """The most informative sentence of THIS paper about a topic.
+
+    Accepts a Paper (searches section by section and prefixes the
+    section name) or raw text. Candidates are scored: a plain-language
+    explanatory sentence mentioning the topic beats a formula- or
+    citation-heavy fragment every time. Returns "" if nothing
+    informative is found (callers then fall back to the description).
+    """
+    if hasattr(source, "sections"):  # a Paper
+        units = [(s.title, s.text) for s in source.sections]
+    else:
+        units = [("", str(source))]
     phrase = name.lower().split(":")[0].strip()
-    idx = low.find(phrase) if len(phrase) >= 4 else -1
-    if idx < 0:
-        tokens = [w for w in re.findall(r"[a-z]{4,}", phrase)]
-        for w in tokens:
-            idx = low.find(w)
-            if idx >= 0:
-                break
-    if idx < 0:
-        return ""
-    start = max(0, idx - 70)
-    snippet = re.sub(r"\s+", " ", text[start:idx + window]).strip()
-    return ("…" + snippet) if start else snippet
+    phrase = re.sub(r"\(.*?\).*", "", phrase).strip() or phrase
+    tokens = [w for w in re.findall(r"[a-z]{4,}", phrase)
+              if w not in ("with", "from", "that", "this", "study")]
+    best: tuple[float, str, str] = (-1.0, "", "")
+    for sec_title, text in units:
+        if sec_title.strip().lower() == "references":
+            continue
+        for sent in re.split(r"(?<=[.!?])\s+", text.replace("\n", " ")):
+            sent = sent.strip()
+            if len(sent) < 40:
+                continue
+            sc = _sentence_score(sent, phrase, tokens)
+            if sc > best[0]:
+                best = (sc, sec_title, sent)
+    if best[0] < 1.0:
+        # No informative sentence: fall back to a cleaned raw window.
+        raw = units[0][1] if units else ""
+        idx = raw.lower().find(phrase) if phrase else -1
+        if idx < 0:
+            return ""
+        start = max(0, idx - 70)
+        return clean_snippet(raw[start:idx + window])
+    cleaned = clean_snippet(best[2])
+    if len(cleaned) > 340:
+        cleaned = cleaned[:340].rsplit(" ", 1)[0] + "…"
+    return f"{best[1]} — {cleaned}" if best[1] else cleaned
 
 
 def heuristic_topics(paper: Paper) -> list[Topic]:
@@ -75,7 +168,7 @@ def heuristic_topics(paper: Paper) -> list[Topic]:
             requirement="hard" if hard else "optional",
             why=c.description,
             search_query=f"{c.name} explained tutorial",
-            paper_context=(c.evidence or "")[:320]))
+            paper_context=""))  # filled from the paper by find_context
     return _ordered(topics)
 
 
@@ -157,26 +250,31 @@ class ProfilerAgent:
         """
         for t in topics:
             if not t.paper_context:
-                t.paper_context = find_context(paper.text, t.name)
+                t.paper_context = find_context(paper, t.name)
             t.self_check = (
                 f"Do you understand {t.name} as this paper uses it — "
                 "could you explain its role in the passage above?")
         if isinstance(self.llm, MockLLM) or not topics:
             return False
         listing = "\n".join(
-            f"- {t.name}: {(t.paper_context or t.why)[:220]}" for t in topics)
+            f"- {t.name}: {(t.paper_context or t.why)[:170]}" for t in topics)
         prompt = (
             "For each topic below, write ONE specific self-check question "
             "starting with \"Do you understand\", based on how THIS paper "
-            "uses the topic in the quoted passage. Mention the concrete "
-            "notation, mechanism, dataset or decision from the passage "
+            "uses the topic in the quoted passage. Ask about the IDEA in "
+            "plain words a beginner can judge themselves against: do not "
+            "quote raw formula notation, symbols or citation numbers. "
+            "Mention the concrete mechanism, dataset or decision from "
+            "the passage "
             "(e.g. \"Do you understand why the attention scores are "
             "divided by sqrt(d_k) before the softmax?\"). Keep each "
-            "question under 30 words. Return ONLY a compact JSON array "
+            "question under 22 words. Return ONLY a compact JSON array "
             'like [{"n":"Topic name","q":"Do you understand ...?"}].\n'
             + listing)
         try:
-            raw = self.llm.complete(prompt, system=_SYSTEM, max_tokens=1800)
+            # Reasoning models spend part of max_tokens thinking; a
+            # small budget returns empty content, hence the headroom.
+            raw = self.llm.complete(prompt, system=_SYSTEM, max_tokens=2800)
         except Exception:  # noqa: BLE001 - templates above remain
             return False
         by_name: dict[str, str] = {}
