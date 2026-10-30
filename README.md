@@ -86,9 +86,9 @@ is capped (`--max-searches 16`) and cached, like LLM calls.
 ## Quick start (without profiling)
 
 ```bash
-arxplain profile --save me.json        # dimension-level template (0=novice .. 4=expert)
 arxplain explain --demo --level beginner
 arxplain explain 1706.03762 --diagnose   # quiz sets coarse levels
+arxplain explain 1706.03762 --profile examples/me.json   # hand-written profile file
 ```
 
 Per-dimension flags work without a profile file too:

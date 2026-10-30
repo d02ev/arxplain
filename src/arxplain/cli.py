@@ -89,7 +89,7 @@ def load_profile(args) -> UserProfile:
 
 
 def _add_profile_args(sp) -> None:
-    sp.add_argument("--profile", help="JSON profile file (see `arxplain profile`)")
+    sp.add_argument("--profile", help="JSON profile file (from `arxplain profile-paper`)")
     sp.add_argument("--name", default=None)
     sp.add_argument("--goal", default=None)
     sp.add_argument("--level", default=None,
@@ -289,21 +289,6 @@ def cmd_profile_paper(args) -> int:
     return 0
 
 
-def cmd_profile(args) -> int:
-    template = UserProfile(name="learner", goal="understand and implement this paper")
-    for d in Dimension:
-        template.set_level(d, Level.BEGINNER)
-    out = json.dumps(template.to_dict(), indent=2)
-    if args.save:
-        Path(args.save).write_text(out)
-        print(f"Wrote template to {args.save}")
-    else:
-        print(out)
-        print("\nEdit the levels (0=novice .. 4=expert), save as e.g. me.json, "
-              "then: arxplain explain <paper> --profile me.json", file=sys.stderr)
-    return 0
-
-
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="arxplain",
@@ -378,10 +363,6 @@ def build_parser() -> argparse.ArgumentParser:
     pp.add_argument("--default-rating", type=int, default=None,
                     help="non-interactive: give every topic this 1-10 rating")
     pp.set_defaults(fn=cmd_profile_paper)
-
-    pf = sub.add_parser("profile", help="print/save a profile template")
-    pf.add_argument("--save", default=None)
-    pf.set_defaults(fn=cmd_profile)
     return ap
 
 
