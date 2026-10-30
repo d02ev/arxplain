@@ -27,6 +27,8 @@ paper ──▶ Ingestion ──▶ Concept extraction ──▶ Gap analysis (p
 ```bash
 uv sync            # or: pip install -e .
 uv sync --extra pdf   # optional: PDF text extraction via pypdf
+uv sync --extra markitdown  # optional: MarkItDown fallback for DOCX/PPTX/generic HTML
+uv sync --extra search      # optional: DDGS library for resource search
 ```
 
 No API key is needed to try it — ArXplain runs offline with a built-in

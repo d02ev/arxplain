@@ -12,6 +12,7 @@ dependencies = []
 [project.optional-dependencies]
 pdf = ["pypdf>=4.0"]
 search = ["ddgs>=9.0"]
+markitdown = ["markitdown>=0.1.2"]
 dev = ["pytest>=8.0"]
 
 [project.scripts]

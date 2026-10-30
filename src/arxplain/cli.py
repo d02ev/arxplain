@@ -57,6 +57,13 @@ def load_paper(raw: str, *, use_cache: bool = True) -> Paper:
     if p.exists():
         if p.suffix.lower() == ".pdf":
             return paper_from_pdf_bytes(p.read_bytes(), source_id=str(p))
+        if p.suffix.lower() not in (".txt", ".md", ".rst", ".tex", ""):
+            # DOCX/PPTX/HTML etc.: MarkItDown fallback if installed.
+            from .ingestion import convert_with_markitdown
+            markdown = convert_with_markitdown(p.read_bytes(), p.suffix)
+            if markdown:
+                return paper_from_text(markdown, source="file (markitdown)",
+                                       source_id=str(p))
         return paper_from_text(p.read_text(encoding="utf-8", errors="ignore"),
                                source="file", source_id=str(p))
     if re.match(r"^https?://", raw):

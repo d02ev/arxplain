@@ -498,6 +498,39 @@ def fetch_arxiv(arxiv_id: str, *, timeout: int = 30,
                  sections=split_sections(text), complete=False)
 
 
+def convert_with_markitdown(data: bytes, file_extension: str = "") -> str | None:
+    """Convert a document to Markdown via Microsoft MarkItDown, if the
+    optional `markitdown` extra is installed. Returns None otherwise.
+
+    This is a FALLBACK adapter for formats the structured parsers
+    handle poorly (generic HTML, DOCX, PPTX, ...). It is never used
+    for arXiv HTML/PDF, where the native parser preserves figures,
+    bibliography structure and math that Markdown conversion loses.
+    """
+    try:
+        module = __import__("markitdown")
+    except Exception:  # noqa: BLE001
+        return None
+    try:
+        import io
+        converter = module.MarkItDown()
+        result = None
+        if hasattr(converter, "convert_stream"):
+            result = converter.convert_stream(
+                io.BytesIO(data), file_extension=file_extension or ".html")
+        if result is None:
+            import tempfile
+            with tempfile.NamedTemporaryFile(
+                    suffix=file_extension or ".html", delete=True) as fh:
+                fh.write(data)
+                fh.flush()
+                result = converter.convert(fh.name)
+        return (getattr(result, "text_content", None)
+                or getattr(result, "markdown", None) or "") or None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def fetch_url_text(url: str, *, timeout: int = 30,
                    use_cache: bool = True) -> Paper:
     cache_key = f"url:{url}"
@@ -520,6 +553,14 @@ def fetch_url_text(url: str, *, timeout: int = 30,
         if use_cache:
             save_cached_paper(cache_key, paper)
         return paper
+    # Structured parse failed: MarkItDown (if installed) converts the
+    # page to Markdown, which the section splitter understands.
+    markdown = convert_with_markitdown(data, ".html")
+    if markdown:
+        paper = paper_from_text(markdown, source="url (markitdown)",
+                                source_id=url)
+        if len(paper.sections) >= 2:
+            return paper
     text = re.sub(r"<[^>]+>", " ", html)
     text = re.sub(r"\s+", " ", text)
     return paper_from_text(text, source="url", source_id=url)
