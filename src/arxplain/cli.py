@@ -3,7 +3,6 @@
   arxplain explain 1706.03762
   arxplain explain paper.pdf --profile me.json -o out.html
   arxplain explain --demo --level beginner
-  arxplain diagnose --save me.json
   arxplain profile-paper 1706.03762 --save profile.json
 """
 from __future__ import annotations
@@ -290,16 +289,6 @@ def cmd_profile_paper(args) -> int:
     return 0
 
 
-def cmd_diagnose(args) -> int:
-    profile = load_profile(args)
-    profile = run_diagnose(profile)
-    print(json.dumps(profile.to_dict(), indent=2))
-    if args.save:
-        Path(args.save).write_text(json.dumps(profile.to_dict(), indent=2))
-        print(f"Saved profile to {args.save}")
-    return 0
-
-
 def cmd_profile(args) -> int:
     template = UserProfile(name="learner", goal="understand and implement this paper")
     for d in Dimension:
@@ -357,11 +346,6 @@ def build_parser() -> argparse.ArgumentParser:
                     help="run the adaptive diagnostic quiz first")
     _add_profile_args(ex)
     ex.set_defaults(fn=cmd_explain)
-
-    dg = sub.add_parser("diagnose", help="adaptive quiz that builds your profile")
-    dg.add_argument("--save", default=None, help="save the resulting profile JSON")
-    _add_profile_args(dg)
-    dg.set_defaults(fn=cmd_diagnose)
 
     pp = sub.add_parser(
         "profile-paper",

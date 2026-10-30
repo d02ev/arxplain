@@ -120,7 +120,7 @@ arxplain explain paper.pdf --mathematics 1 --frameworks 3 --language advanced
 | Explainer | Writes each background-topic explanation at the depth your gap implies; uses the configured LLM when present, heuristics offline |
 | Paper explainer | **Explains the paper itself, section by section**, adapted to your ratings, with Hard-Requirement links inline where you are weak (LLM rewrite in `--llm-mode quality`, extractive and free otherwise) |
 | Profiler | LLM + web search classify paper topics as Hard Requirement vs Good To Know; your 1–10 ratings become `profile.json` |
-| Quiz | Diagnostic quiz used by `diagnose`/`--diagnose` to set coarse levels |
+| Quiz | Diagnostic quiz used by `--diagnose` to set coarse levels |
 
 The agent trace (which agent did what, LLM usage) is backend metadata: it
 is printed in the terminal and printed in the terminal, but it is **not** rendered into the
