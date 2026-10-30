@@ -50,7 +50,7 @@ steps on NVIDIA GPUs. Hyperparameters were tuned carefully.
 """
 
 
-def load_paper(raw: str) -> Paper:
+def load_paper(raw: str, *, use_cache: bool = True) -> Paper:
     if raw == "--demo":
         return paper_from_text(DEMO_TEXT, source="demo", source_id="attention")
     p = Path(raw)
@@ -61,10 +61,10 @@ def load_paper(raw: str) -> Paper:
                                source="file", source_id=str(p))
     if re.match(r"^https?://", raw):
         if "arxiv.org" in raw:
-            return fetch_arxiv(normalize_arxiv_id(raw))
-        return fetch_url_text(raw)
+            return fetch_arxiv(normalize_arxiv_id(raw), use_cache=use_cache)
+        return fetch_url_text(raw, use_cache=use_cache)
     if re.fullmatch(r"\d{4}\.\d{4,5}(v\d+)?", raw.strip()) or "arxiv" in raw.lower():
-        return fetch_arxiv(raw)
+        return fetch_arxiv(raw, use_cache=use_cache)
     return paper_from_text(raw, source="text")
 
 
@@ -143,7 +143,7 @@ def cmd_explain(args) -> int:
         print("error: provide a paper (arXiv id, file, URL) or --demo",
               file=sys.stderr)
         return 2
-    paper = load_paper(raw)
+    paper = load_paper(raw, use_cache=not args.no_cache)
     profile = load_profile(args)
     if args.diagnose:
         profile = run_diagnose(profile)
@@ -247,7 +247,7 @@ def cmd_profile_paper(args) -> int:
     if not raw:
         print("error: provide a paper (arXiv id, file, URL) or --demo", file=sys.stderr)
         return 2
-    paper = load_paper(raw)
+    paper = load_paper(raw, use_cache=not args.no_cache)
     try:
         llm = _build_llm(args)
         search = get_search(args.search, max_calls=args.max_searches,

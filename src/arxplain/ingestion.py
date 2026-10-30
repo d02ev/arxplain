@@ -7,11 +7,14 @@ one section as if it were the whole paper.
 """
 from __future__ import annotations
 
+import json
+import os
 import re
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
+from pathlib import Path
 
 from .models import Figure, Paper, Reference, Section
 
@@ -390,19 +393,61 @@ def parse_arxiv_html(html_text: str, base_url: str = "") -> list[Section]:
     return parse_html_document(html_text, base_url)[0]
 
 
+def _paper_cache_path(key: str) -> Path:
+    import hashlib as _h
+    base = os.getenv("ARXPLAIN_CACHE_DIR") or str(
+        Path(os.getenv("XDG_CACHE_HOME", Path.home() / ".cache")) / "arxplain")
+    return Path(base) / "papers" / f"{_h.sha256(key.encode()).hexdigest()}.json"
+
+
+def load_cached_paper(key: str) -> Paper | None:
+    """A previously parsed PaperDocument for this source, if any."""
+    if os.getenv("ARXPLAIN_PAPER_CACHE", "1") == "0":
+        return None
+    path = _paper_cache_path(key)
+    if not path.exists():
+        return None
+    try:
+        return Paper.from_document(json.loads(path.read_text()))
+    except Exception:  # noqa: BLE001 - a bad cache entry is just a miss
+        return None
+
+
+def save_cached_paper(key: str, paper: Paper) -> None:
+    """Cache a fully parsed paper. Abstract-only results are NOT cached:
+    a transient failure must not become permanent."""
+    if os.getenv("ARXPLAIN_PAPER_CACHE", "1") == "0" or not paper.complete:
+        return
+    try:
+        path = _paper_cache_path(key)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(paper.to_document()))
+    except Exception:  # noqa: BLE001 - cache is best-effort
+        pass
+
+
 def _get(url: str, timeout: int) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": "arxplain/0.1"})
     with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310
         return r.read()
 
 
-def fetch_arxiv(arxiv_id: str, *, timeout: int = 30) -> Paper:
+def fetch_arxiv(arxiv_id: str, *, timeout: int = 30,
+                use_cache: bool = True) -> Paper:
     """Fetch the FULL paper from arXiv: metadata, then HTML, then PDF.
 
+    A previously parsed PaperDocument is served from the on-disk cache
+    (profile-paper then explain on the same paper parses it once).
     Only if both full-text routes fail is the abstract returned alone,
-    flagged complete=False.
+    flagged complete=False (and never cached).
     """
     aid = normalize_arxiv_id(arxiv_id)
+    cache_key = f"arxiv:{aid}"
+    if use_cache:
+        cached = load_cached_paper(cache_key)
+        if cached is not None:
+            cached.source = "arxiv (cached)"
+            return cached
     xml = _get(f"https://export.arxiv.org/api/query?id_list={aid}", timeout).decode()
     ns = {"a": "http://www.w3.org/2005/Atom"}
     entry = ET.fromstring(xml).find("a:entry", ns)
@@ -427,10 +472,13 @@ def fetch_arxiv(arxiv_id: str, *, timeout: int = 30) -> Paper:
             sections, figures, references = [], [], []
         if len(sections) >= 3:
             text = "\n\n".join(f"{s.title}\n{s.text}" for s in sections)
-            return Paper(title=title or aid, text=text, authors=authors,
-                         abstract=abstract, source="arxiv", source_id=aid,
-                         sections=sections, figures=figures,
-                         references=references, complete=True)
+            paper = Paper(title=title or aid, text=text, authors=authors,
+                          abstract=abstract, source="arxiv", source_id=aid,
+                          sections=sections, figures=figures,
+                          references=references, complete=True)
+            if use_cache:
+                save_cached_paper(cache_key, paper)
+            return paper
     # 2) PDF full text.
     try:
         paper = paper_from_pdf_bytes(_get(f"https://arxiv.org/pdf/{aid}", timeout),
@@ -438,6 +486,8 @@ def fetch_arxiv(arxiv_id: str, *, timeout: int = 30) -> Paper:
         if len(paper.sections) >= 3:
             paper.title, paper.authors = title or paper.title, authors
             paper.abstract, paper.source = abstract, "arxiv"
+            if use_cache:
+                save_cached_paper(cache_key, paper)
             return paper
     except Exception:  # noqa: BLE001
         pass
@@ -448,7 +498,13 @@ def fetch_arxiv(arxiv_id: str, *, timeout: int = 30) -> Paper:
                  sections=split_sections(text), complete=False)
 
 
-def fetch_url_text(url: str, *, timeout: int = 30) -> Paper:
+def fetch_url_text(url: str, *, timeout: int = 30,
+                   use_cache: bool = True) -> Paper:
+    cache_key = f"url:{url}"
+    if use_cache:
+        cached = load_cached_paper(cache_key)
+        if cached is not None:
+            return cached
     req = urllib.request.Request(url, headers={"User-Agent": "arxplain/0.1"})
     with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310
         data = r.read()
@@ -461,6 +517,8 @@ def fetch_url_text(url: str, *, timeout: int = 30) -> Paper:
         paper = paper_from_text(text, source="url", source_id=url)
         paper.sections, paper.figures = sections, figures
         paper.references = references
+        if use_cache:
+            save_cached_paper(cache_key, paper)
         return paper
     text = re.sub(r"<[^>]+>", " ", html)
     text = re.sub(r"\s+", " ", text)
