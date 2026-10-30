@@ -162,6 +162,64 @@ class Paper:
             d["text"] = self.text
         return d
 
+    # -- Canonical PaperDocument JSON -------------------------------------
+    # The contract between ingestion adapters (arXiv HTML, PDF, text,
+    # MarkItDown, future parsers) and every downstream agent. Agents
+    # consume this document; they never re-parse a source file.
+    def to_document(self) -> dict[str, Any]:
+        doc = self.to_dict(include_text=True)
+        doc["schema_version"] = PAPER_SCHEMA_VERSION
+        return doc
+
+    @classmethod
+    def from_document(cls, doc: dict[str, Any]) -> "Paper":
+        if int(doc.get("schema_version", 1)) > PAPER_SCHEMA_VERSION:
+            raise ValueError(
+                f"paper document schema {doc.get('schema_version')} is newer "
+                f"than supported {PAPER_SCHEMA_VERSION}")
+        concepts = []
+        for c in doc.get("concepts") or []:
+            try:
+                dim = Dimension(str(c.get("dimension", "theory")).lower())
+            except Exception:
+                dim = Dimension.EXPERIMENTATION
+            concepts.append(Concept(
+                name=c.get("name", ""), dimension=dim,
+                description=c.get("description", ""),
+                required_level=int(c.get("required_level", 2)),
+                evidence=c.get("evidence", ""),
+                prerequisites=list(c.get("prerequisites") or []),
+                section=c.get("section", "")))
+        paper = cls(
+            title=doc.get("title", "Untitled paper"),
+            text=doc.get("text", ""),
+            authors=list(doc.get("authors") or []),
+            abstract=doc.get("abstract", ""),
+            source=doc.get("source", "text"),
+            source_id=doc.get("source_id", ""),
+            sections=[Section(title=s.get("title", ""), text=s.get("text", ""),
+                              level=int(s.get("level", 1)),
+                              index=int(s.get("index", i)))
+                      for i, s in enumerate(doc.get("sections") or [])],
+            concepts=concepts,
+            figures=[Figure(**{k: f.get(k, "") for k in
+                               ("src", "caption", "alt", "section_title", "label")})
+                     for f in doc.get("figures") or []],
+            references=[Reference(**{k: r.get(k, "") for k in
+                                     ("text", "title", "authors", "year",
+                                      "label", "url", "url_kind")})
+                        for r in doc.get("references") or []],
+            complete=bool(doc.get("complete", True)))
+        if doc.get("id"):
+            paper.id = doc["id"]
+        if not paper.text and paper.sections:
+            paper.text = "\n\n".join(f"{s.title}\n{s.text}"
+                                     for s in paper.sections)
+        return paper
+
+
+PAPER_SCHEMA_VERSION = 1
+
 
 def familiarity_to_level(familiarity: int) -> int:
     """Map a user's 1-10 self-rating onto the 0-4 Level scale."""
