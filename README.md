@@ -4,7 +4,7 @@
 
 ArXplain is a multi-step agentic system. It reads a paper, works out what
 the paper assumes you already know — mathematics, experimentation,
-keywords & terminology, frameworks, programming language, tools,
+keywords & terminology, results, assumptions and limitations —
 domain knowledge and theory — compares that against *your* profile on
 each of those dimensions, and then writes an explanation whose depth
 adapts dimension by dimension: from-zero with an analogy where you have
@@ -94,7 +94,7 @@ arxplain explain 1706.03762 --profile examples/me.json   # hand-written profile 
 Per-dimension flags work without a profile file too:
 
 ```bash
-arxplain explain paper.pdf --mathematics 1 --frameworks 3 --language advanced
+arxplain explain paper.pdf --mathematics 1 --theory advanced --limitations 0
 # levels accept 0-4 or novice|beginner|intermediate|advanced|expert
 ```
 
@@ -114,7 +114,7 @@ arxplain explain paper.pdf --mathematics 1 --frameworks 3 --language advanced
 | Agent | Responsibility |
 |---|---|
 | Ingestion | Full paper from arXiv (HTML, then PDF; abstract-only is a flagged fallback, never silent), PDF / URL / text → the paper's real sections |
-| Extractor | Finds maths, datasets & metrics, frameworks, languages, tools, terminology |
+| Extractor | Finds core ideas, maths, datasets & metrics, results, assumptions, limitations and terminology; framework/language/tool mentions are demoted to one experimental-setup note, never a topic |
 | Gap analysis | Required level − your level, per concept |
 | Planner | Orders a learning path (largest gap first), estimates time |
 | Explainer | Writes each background-topic explanation at the depth your gap implies; uses the configured LLM when present, heuristics offline |

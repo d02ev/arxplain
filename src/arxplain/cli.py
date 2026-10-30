@@ -293,7 +293,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="arxplain",
         description="Explain a research paper at YOUR level — mathematics, "
-                    "experimentation, keywords, frameworks, language and tools "
+                    "experimentation, results, assumptions, limitations and terminology "
                     "are each adapted to what you already know.")
     sub = ap.add_subparsers(dest="command", required=True)
 

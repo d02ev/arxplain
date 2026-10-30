@@ -9,26 +9,35 @@ from typing import Any
 
 
 class Dimension(str, Enum):
+    """What a paper demands of its reader — its ideas, not its tooling.
+
+    Frameworks / programming languages / tools are deliberately NOT
+    dimensions: most papers present a strategy or algorithm that is
+    independent of any implementation. Such mentions are demoted to a
+    single experimental-setup note (see extractor). Old profiles that
+    still carry the removed keys are ignored on load.
+    """
+
+    THEORY = "theory"                # core idea: strategy / algorithm / approach
     MATHEMATICS = "mathematics"
-    EXPERIMENTATION = "experimentation"
-    KEYWORDS = "keywords"          # terminology / vocabulary of the field
-    FRAMEWORKS = "frameworks"      # PyTorch, TensorFlow, JAX, ...
-    LANGUAGE = "language"          # programming language: Python, C++, ...
-    TOOLS = "tools"                # Docker, CUDA, Git, W&B, ...
-    DOMAIN = "domain"              # subject-matter knowledge
-    THEORY = "theory"              # ML / CS theory behind the paper
+    EXPERIMENTATION = "experimentation"  # design: datasets, baselines, metrics
+    RESULTS = "results"              # what the experiments actually showed
+    ASSUMPTIONS = "assumptions"      # assumptions & considerations made
+    LIMITATIONS = "limitations"      # constraints, costs, failure cases
+    KEYWORDS = "keywords"            # terminology / vocabulary of the field
+    DOMAIN = "domain"                # subject-matter knowledge
 
     @property
     def label(self) -> str:
         return {
+            "theory": "Core Ideas & Theory",
             "mathematics": "Mathematics",
             "experimentation": "Experimentation",
+            "results": "Results & Interpretation",
+            "assumptions": "Assumptions & Considerations",
+            "limitations": "Constraints & Limitations",
             "keywords": "Keywords & Terminology",
-            "frameworks": "Frameworks",
-            "language": "Programming Language",
-            "tools": "Tools & Infrastructure",
             "domain": "Domain Knowledge",
-            "theory": "Theory & Foundations",
         }[self.value]
 
 
@@ -110,6 +119,21 @@ class Figure:
 
 
 @dataclass
+class Reference:
+    """One cited work from the paper's bibliography, with a real link."""
+    text: str  # full citation as printed in the paper
+    title: str = ""
+    authors: str = ""
+    year: str = ""
+    label: str = ""  # e.g. "[13]"
+    url: str = ""    # doi.org / arxiv.org / publisher / scholar search
+    url_kind: str = ""  # doi | arxiv | publisher | scholar
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
 class Paper:
     title: str
     text: str
@@ -120,6 +144,7 @@ class Paper:
     sections: list[Section] = field(default_factory=list)
     concepts: list[Concept] = field(default_factory=list)
     figures: list[Figure] = field(default_factory=list)
+    references: list[Reference] = field(default_factory=list)
     complete: bool = True  # False = only the abstract could be retrieved
     id: str = field(default_factory=lambda: _uid("paper_"))
 
@@ -129,6 +154,7 @@ class Paper:
             "abstract": self.abstract, "source": self.source,
             "source_id": self.source_id, "complete": self.complete,
             "figures": [f.to_dict() for f in self.figures],
+            "references": [r.to_dict() for r in self.references],
             "sections": [s.to_dict() for s in self.sections],
             "concepts": [c.to_dict() for c in self.concepts],
         }
@@ -190,7 +216,10 @@ class Topic:
         try:
             dim = Dimension(str(d.get("dimension", "theory")).lower())
         except Exception:
-            dim = Dimension.THEORY
+            # Profiles written before frameworks/language/tools were
+            # removed: such topics were implementation details, i.e.
+            # experimental setup, not core ideas.
+            dim = Dimension.EXPERIMENTATION
         return cls(name=d.get("name", ""), dimension=dim,
                    requirement="optional" if d.get("requirement") == "optional" else "hard",
                    why=d.get("why", ""), search_query=d.get("search_query", ""),
@@ -403,12 +432,14 @@ class SectionExplanation:
     # Hard Requirements for THIS section, with the user's rating on each.
     hard_requirements: list[Topic] = field(default_factory=list)
     figures: list[Figure] = field(default_factory=list)
+    references: list[Reference] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d["resources"] = [r.to_dict() for r in self.resources]
         d["hard_requirements"] = [t.to_dict() for t in self.hard_requirements]
         d["figures"] = [f.to_dict() for f in self.figures]
+        d["references"] = [r.to_dict() for r in self.references]
         return d
 
 

@@ -9,14 +9,14 @@ import re
 
 from .models import Concept, Dimension, Paper
 
-FRAMEWORKS = ["PyTorch", "TensorFlow", "JAX", "Keras", "scikit-learn",
-              "Hugging Face", "Transformers", "Diffusers", "Flax", "MXNet",
-              "Caffe", "ONNX", "TensorRT", "Ray", "Spark", "LangChain"]
-LANGUAGES = ["Python", "C++", "C", "Rust", "Julia", "Java", "CUDA", "Go",
-             "JavaScript", "TypeScript", "R", "MATLAB", "Scala"]
-TOOLS = ["Docker", "Kubernetes", "Git", "CUDA", "cuDNN", "Weights & Biases",
-         "W&B", "MLflow", "TensorBoard", "AWS", "GCP", "Azure", "Slurm",
-         "Hugging Face Hub", "Jupyter", "Linux"]
+# Implementation mentions are NOT topics: a paper's strategy/algorithm
+# is independent of the language or framework one team happened to use.
+# They are collected only to be demoted into a single setup note.
+IMPLEMENTATION_TERMS = ["PyTorch", "TensorFlow", "JAX", "Keras",
+                        "scikit-learn", "Hugging Face", "TensorFlow",
+                        "Python", "C++", "Rust", "Julia", "CUDA", "Docker",
+                        "Kubernetes", "Weights & Biases", "W&B", "MLflow",
+                        "TensorBoard", "Git", "Linux", "ONNX", "Ray"]
 DATASETS = ["MNIST", "CIFAR-10", "CIFAR-100", "ImageNet", "COCO", "GLUE",
             "SQuAD", "WikiText", "LibriSpeech", "MMLU", "HumanEval", "MS MARCO"]
 METRICS = ["accuracy", "precision", "recall", "F1", "BLEU", "ROUGE", "perplexity",
@@ -44,6 +44,42 @@ THEORY_PATTERNS: list[tuple[str, str, int]] = [
     (r"normalization|batch norm|layer norm", "Normalization layers", 1),
 ]
 
+RESULTS_PATTERNS: list[tuple[str, str, int, str]] = [
+    (r"outperform|state-of-the-art|achieves?\s+\d|superior quality|improv\w+ over",
+     "Main results & headline findings", 2,
+     "What the experiments actually showed, in numbers."),
+    (r"we observe|results show|we find that|our results|finding",
+     "Interpreting the results", 2,
+     "What the numbers mean — and what they do not show."),
+    (r"ablation|removing|without the|variant",
+     "Ablation results: what each part contributes", 2,
+     "Evidence that each component of the method earns its place."),
+]
+ASSUMPTION_PATTERNS: list[tuple[str, str, int, str]] = [
+    (r"we assume|assumption|assumes? that|assuming",
+     "Assumptions the method makes", 2,
+     "Things the paper takes for granted; the method may break without them."),
+    (r"i\.i\.d\.|independent and identically|independently distributed",
+     "Data assumptions (i.i.d. and similar)", 3,
+     "Statistical assumptions about where the data comes from."),
+    (r"for simplicity|simplifying|without loss of generality|we consider the case",
+     "Simplifying assumptions & scope choices", 2,
+     "Cases the paper deliberately restricts itself to."),
+]
+LIMITATION_PATTERNS: list[tuple[str, str, int, str]] = [
+    (r"limitation|does not handle|fails? to|failure case|cannot handle",
+     "Limitations & failure cases", 2,
+     "Where the approach breaks or was not tested."),
+    (r"quadratic|complexity of|computational cost|memory requirement|scales? (poorly|with)",
+     "Complexity & scaling constraints", 2,
+     "How cost grows with input size — often the real constraint."),
+    (r"future work|remains? to be|open problem|beyond the scope",
+     "Open problems & future work", 1,
+     "What the authors themselves leave undone."),
+    (r"large amounts of data|data-hungry|expensive to train|training cost",
+     "Data & compute constraints", 2,
+     "What it costs, in data and compute, to make this work."),
+]
 
 def _evidence(text: str, pattern: str) -> str:
     m = re.search(pattern, text, re.I)
@@ -51,18 +87,6 @@ def _evidence(text: str, pattern: str) -> str:
         return ""
     s = max(0, m.start() - 70)
     return re.sub(r"\s+", " ", text[s:m.end() + 90]).strip()
-
-
-def _find_terms(text: str, terms: list[str], dim: Dimension, level: int,
-                section: str = "") -> list[Concept]:
-    out = []
-    for term in terms:
-        if re.search(rf"\b{re.escape(term)}\b", text, re.I):
-            out.append(Concept(name=term, dimension=dim, required_level=level,
-                               evidence=_evidence(text, re.escape(term)),
-                               section=section,
-                               description=f"{term} appears in this paper."))
-    return out
 
 
 def extract_concepts(paper: Paper) -> list[Concept]:
@@ -86,12 +110,24 @@ def extract_concepts(paper: Paper) -> list[Concept]:
             add(Concept(name=name, dimension=Dimension.THEORY, required_level=lvl,
                         evidence=_evidence(text, pattern),
                         description=f"Core idea used by the paper: {name.lower()}."))
-    for c in _find_terms(text, FRAMEWORKS, Dimension.FRAMEWORKS, 1):
-        add(c)
-    for c in _find_terms(text, LANGUAGES, Dimension.LANGUAGE, 1):
-        add(c)
-    for c in _find_terms(text, TOOLS, Dimension.TOOLS, 1):
-        add(c)
+    mentioned = [term for term in IMPLEMENTATION_TERMS
+                 if re.search(rf"\b{re.escape(term)}\b", text, re.I)]
+    if mentioned:
+        add(Concept(
+            name="Experimental setup (implementation details)",
+            dimension=Dimension.EXPERIMENTATION, required_level=1,
+            evidence=_evidence(text, re.escape(mentioned[0])),
+            description=("Mentioned only as how this team implemented the "
+                         "work (" + ", ".join(mentioned[:5]) + "). The "
+                         "paper's ideas do not depend on these choices; "
+                         "they matter only for reproducing the experiments.")))
+    for patterns, dim in ((RESULTS_PATTERNS, Dimension.RESULTS),
+                          (ASSUMPTION_PATTERNS, Dimension.ASSUMPTIONS),
+                          (LIMITATION_PATTERNS, Dimension.LIMITATIONS)):
+        for pattern, name, lvl, desc in patterns:
+            if re.search(pattern, text, re.I):
+                add(Concept(name=name, dimension=dim, required_level=lvl,
+                            evidence=_evidence(text, pattern), description=desc))
     for term in DATASETS:
         if re.search(rf"\b{re.escape(term)}\b", text):
             add(Concept(name=f"Dataset: {term}", dimension=Dimension.EXPERIMENTATION,

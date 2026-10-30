@@ -119,8 +119,8 @@ class ProfilerAgent:
             "(Good To Know). You may add up to 3 missing prerequisites. "
             "Return ONLY a compact JSON array like "
             '[{"n":"Topic name","d":"theory","r":"hard"}] where d is one of '
-            "mathematics|experimentation|keywords|frameworks|language|tools|"
-            f"domain|theory and r is hard|optional. At most {self.max_topics}.")
+            "theory|mathematics|experimentation|results|assumptions|limitations|keywords|domain "
+            f"and r is hard|optional. At most {self.max_topics}.")
         try:
             raw = self.llm.complete(prompt, system=_SYSTEM, max_tokens=2400)
         except Exception:  # noqa: BLE001

@@ -20,9 +20,26 @@ def test_extraction_covers_all_dimensions():
     dims = {c.dimension for c in concepts}
     assert Dimension.MATHEMATICS in dims
     assert Dimension.EXPERIMENTATION in dims
-    assert Dimension.FRAMEWORKS in dims  # PyTorch
-    assert Dimension.LANGUAGE in dims    # Python
-    assert Dimension.TOOLS in dims       # Docker / CUDA
+    assert Dimension.THEORY in dims
+    assert Dimension.RESULTS in dims
+    # Frameworks/language/tools are NOT dimensions any more: PyTorch,
+    # Python, Docker and CUDA collapse into one setup note under
+    # Experimentation, and no concept carries a tooling dimension.
+    setup = [c for c in concepts if "Experimental setup" in c.name]
+    assert setup and setup[0].dimension == Dimension.EXPERIMENTATION
+    assert "PyTorch" in setup[0].description
+
+
+def test_new_dimensions_assumptions_and_limitations():
+    text = ("We assume the data are i.i.d. and, for simplicity, consider "
+            "the binary case. Our method outperforms prior work by 3 BLEU. "
+            "A limitation is the quadratic complexity, which fails to "
+            "scale; future work remains to be done on longer inputs.")
+    paper = paper_from_text(f"T\n\nAbstract\n{text}\n\n1. Method\n{text}")
+    dims = {c.dimension for c in extract_concepts(paper)}
+    assert Dimension.ASSUMPTIONS in dims
+    assert Dimension.LIMITATIONS in dims
+    assert Dimension.RESULTS in dims
 
 
 def test_explanation_depth_adapts_to_profile():

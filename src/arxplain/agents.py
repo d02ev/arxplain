@@ -21,9 +21,9 @@ ANALOGIES: dict[Dimension, str] = {
     Dimension.MATHEMATICS: "Think of it as a recipe: inputs go in, a rule transforms them, and the output tells you what to do next.",
     Dimension.EXPERIMENTATION: "Think of it as a taste-test: same recipe, different tweaks, then score which plate people prefer.",
     Dimension.KEYWORDS: "Think of it as learning the local slang before visiting a new city.",
-    Dimension.FRAMEWORKS: "Think of it as a power tool: you still need the idea, it just removes the manual labour.",
-    Dimension.LANGUAGE: "Think of it as the language the instructions are written in.",
-    Dimension.TOOLS: "Think of it as the workshop the work happens in.",
+    Dimension.RESULTS: "Think of it as the scoreboard after the match: what actually happened, not what was hoped.",
+    Dimension.ASSUMPTIONS: "Think of it as the fine print: things taken for granted before the argument starts.",
+    Dimension.LIMITATIONS: "Think of it as the edge of the map: where this stops working and why.",
     Dimension.DOMAIN: "Think of it as background knowledge locals take for granted.",
     Dimension.THEORY: "Think of it as the 'why it works' story behind the trick.",
 }
@@ -290,7 +290,10 @@ class PaperExplainerAgent:
         by_name = {e.concept_name: e for e in explanations}
         gap_by_name = {g.concept.name: g for g in gaps}
         out: list[SectionExplanation] = []
-        for s in paper.sections:
+        # Title-page/licence text ("Preamble") is not a paper section.
+        explained_sections = [s for s in paper.sections
+                              if s.title.strip().lower() != "preamble"]
+        for s in explained_sections:
             used = concepts_in_section(s.text, paper.concepts)
             if len(s.text.strip()) >= 40:
                 body, keys = self._heuristic_body(s, used, by_name,
@@ -322,24 +325,35 @@ class PaperExplainerAgent:
                             weak_res.append(r)
             figs = [f for f in paper.figures
                     if f.section_title.lower() == s.title.lower()]
+            refs = (list(paper.references)
+                    if s.title.strip().lower() == "references" else [])
+            if refs:
+                body = (f"This is the paper's bibliography: the {len(refs)} "
+                        "works the authors cite and build on. Each entry "
+                        "below links to the actual cited paper (publisher/"
+                        "DOI or arXiv where available, otherwise a Scholar "
+                        "lookup of its title). Following the entries marked "
+                        "as background above is the fastest way to fill "
+                        "the gaps this paper assumes.")
+                keys = [r.title or r.text[:80] for r in refs[:3]]
             out.append(SectionExplanation(
                 section_title=s.title, body=body, key_points=keys,
                 concepts_used=[c.name for c in used], resources=weak_res[:3],
-                hard_requirements=reqs, figures=figs))
+                hard_requirements=reqs, figures=figs, references=refs))
         attached = {id(f) for se in out for f in se.figures}
         for f in paper.figures:  # never silently lose a figure
             if id(f) in attached:
                 continue
-            for se, s in zip(out, paper.sections):
+            for se, s in zip(out, explained_sections):
                 if f.label and f.label.lower() in s.text.lower():
                     se.figures.append(f)
                     break
         if not isinstance(self.llm, MockLLM) and out:
             try:
-                bodies = self._llm_bodies(paper, paper.sections, profile)
+                bodies = self._llm_bodies(paper, explained_sections, profile)
             except Exception:  # noqa: BLE001
                 bodies = {}
-            for se, s in zip(out, paper.sections):
+            for se, s in zip(out, explained_sections):
                 if bodies.get(s.title):
                     se.body = bodies[s.title]
         return out
@@ -375,18 +389,18 @@ _QUIZ_TEMPLATES: dict[Dimension, tuple[str, list[str], int]] = {
                                  "To make the paper longer",
                                  "To replace the method section",
                                  "It is not used in the paper"], 0),
-    Dimension.FRAMEWORKS: ("What role does '{c}' play in this work?",
-                           ["The software framework used to build/run the system",
-                            "A mathematical proof technique",
-                            "A dataset", "A metric"], 0),
-    Dimension.LANGUAGE: ("Why is '{c}' relevant to this paper?",
-                         ["The implementation is written in it",
-                          "It is the paper's natural language",
-                          "It is a dataset", "It is a metric"], 0),
-    Dimension.TOOLS: ("What is '{c}' used for in this project?",
-                      ["Supporting tooling/infrastructure for the work",
-                       "The main theoretical contribution",
-                       "A baseline model", "An evaluation dataset"], 0),
+    Dimension.RESULTS: ("What does '{c}' tell you about this paper?",
+                           ["What the experiments actually found",
+                            "A definition of a new term",
+                            "A software tool used", "A dataset name"], 0),
+    Dimension.ASSUMPTIONS: ("Why does '{c}' matter when reading this paper?",
+                            ["It is something the method takes for granted",
+                             "It is the main result", "It is a metric",
+                             "It is a baseline"], 0),
+    Dimension.LIMITATIONS: ("What does '{c}' warn the reader about?",
+                            ["Where or why the approach may break",
+                             "How to install the code", "A new theorem",
+                             "A dataset split"], 0),
     Dimension.KEYWORDS: ("What does '{c}' mean in this paper's context?",
                          ["A key term the paper defines or relies on",
                           "An unrelated buzzword", "A typo",
@@ -449,18 +463,18 @@ class QuizAgent:
                                         ["Removing one component to see its effect",
                                          "Training for more epochs",
                                          "A new dataset", "A plotting style"]),
-            Dimension.FRAMEWORKS: ("In PyTorch, what does `optimizer.step()` do?",
-                                   ["Updates the model weights",
-                                    "Loads the dataset", "Plots the loss",
-                                    "Saves a checkpoint only"]),
-            Dimension.LANGUAGE: ("In Python, what is a list comprehension?",
-                                 ["A compact way to build a list",
-                                  "A type of loop import", "A class decorator",
-                                  "A file format"]),
-            Dimension.TOOLS: ("What is Docker mainly used for here?",
-                              ["Packaging code + dependencies to run anywhere",
-                               "Training models", "Writing proofs",
-                               "Annotating data"]),
+            Dimension.RESULTS: ("A paper says it 'outperforms the baseline by 3 BLEU'. What happened?",
+                                ["Its score was 3 points higher on that metric",
+                                 "It trained 3 times faster",
+                                 "It used 3 more datasets", "It has 3 authors"]),
+            Dimension.ASSUMPTIONS: ("What is an assumption in a research paper?",
+                                    ["Something taken for granted that the method relies on",
+                                     "The main result", "A type of chart",
+                                     "A citation style"]),
+            Dimension.LIMITATIONS: ("Why do papers discuss complexity (e.g. O(n^2))?",
+                                    ["It shows how cost grows and where the method stops scaling",
+                                     "It is a citation format", "It names a dataset",
+                                     "It describes the code style"]),
             Dimension.THEORY: ("What does a Transformer block mainly consist of?",
                                ["Attention + feed-forward layers",
                                 "Only convolutions", "Only recurrent cells",
