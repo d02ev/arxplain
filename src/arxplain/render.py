@@ -106,6 +106,7 @@ aside.resources{position:sticky;top:20px;background:var(--paper);border:1px soli
 aside.resources h2{margin-top:0;font-size:19px} aside.resources h4{font-size:14px;margin:14px 0 4px}
 aside.resources ul{margin:4px 0 10px;padding-left:18px;font-size:13px}
 a.topic-link{font-weight:bold;text-decoration:underline;text-underline-offset:2px}
+ol.refs li{margin:10px 0} ol.refs{font-size:14px}
 figure{margin:14px 0} figure img{max-width:100%;height:auto;border:1px solid var(--line)}
 figcaption{font-size:13px;color:var(--muted);margin-top:6px}
 .res-topic{scroll-margin-top:20px;border-top:1px solid var(--line);padding-top:8px}
@@ -152,6 +153,24 @@ def render_html(result: ExplainResult) -> str:
                     f"alt=\"{_esc(f.alt or cap)}\" loading=\"lazy\">"
                     + (f"<figcaption>{_esc(cap)}</figcaption>" if cap else "")
                     + "</figure>")
+            if s.references:
+                items = ""
+                for r in s.references:
+                    title = r.title or r.text[:90]
+                    linked = (f"<a href=\"{_esc(r.url)}\" target=\"_blank\" "
+                              f"rel=\"noopener\">{_esc(title)}</a>"
+                              if r.url else _esc(title))
+                    meta = " · ".join(x for x in [
+                        _esc(r.authors), _esc(r.year),
+                        _esc(r.url_kind)] if x)
+                    items += (f"<li>{_esc(r.label + ' ') if r.label else ''}"
+                              f"{linked}"
+                              + (f"<br><span class='small'>{meta}</span>"
+                                 if meta else "")
+                              + (f"<br><span class='small'>{_esc(r.text)}</span>"
+                                 if r.text and r.text != title else "")
+                              + "</li>")
+                figs_html += f"<ol class='refs'>{items}</ol>"
             req_html = ""
             if s.hard_requirements:
                 items = ""

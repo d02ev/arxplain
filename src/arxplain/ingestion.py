@@ -13,7 +13,28 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
 
-from .models import Figure, Paper, Section
+from .models import Figure, Paper, Reference, Section
+
+
+def resolve_reference_url(text: str, title: str = "",
+                          existing: str = "") -> tuple[str, str]:
+    """Best real link for a citation: publisher/DOI > arXiv > Scholar."""
+    if existing and existing.startswith("http"):
+        kind = "doi" if "doi.org" in existing else "publisher"
+        return existing, kind
+    m = re.search(r"10\.\d{4,9}/[^\s,;\]]+", text)
+    if m:
+        return "https://doi.org/" + m.group(0).rstrip("."), "doi"
+    m = re.search(r"(?:arXiv:|abs/)(\d{4}\.\d{4,5}(?:v\d+)?)", text, re.I)
+    if m:
+        return f"https://arxiv.org/abs/{m.group(1)}", "arxiv"
+    m = re.search(r"(?:arXiv:|abs/)([a-z\-]+/\d{7})", text, re.I)
+    if m:
+        return f"https://arxiv.org/abs/{m.group(1)}", "arxiv"
+    if title:
+        q = urllib.parse.quote_plus(title.strip().rstrip("."))
+        return f"https://scholar.google.com/scholar?q={q}", "scholar"
+    return "", ""
 
 _HEADING = re.compile(
     r"^(#{1,4}\s+.+|\d+(?:\.\d+)*\.?\s+[A-Z][^\n]{2,80}|"
@@ -36,11 +57,8 @@ def split_sections(text: str) -> list[Section]:
         title = re.sub(r"^#+\s*", "", m.group(0)).strip()
         sections.append(Section(title=title, text=text[start:end].strip(),
                                 level=1, index=i))
-    pre = text[:matches[0].start()].strip()
-    if len(pre) > 40:
-        sections.insert(0, Section(title="Preamble", text=pre, index=0))
-        for i, s in enumerate(sections):
-            s.index = i
+    # Text before the first heading (title page, licence boilerplate)
+    # is not a paper section and is never emitted as "Preamble".
     return sections
 
 
@@ -58,12 +76,45 @@ def _guess_abstract(text: str) -> str:
     return re.sub(r"\s+", " ", m.group(1)).strip() if m else text[:600].strip()
 
 
+def parse_references_from_text(section_text: str) -> list[Reference]:
+    """Bibliography entries from plain text (PDF/text papers)."""
+    chunks = re.split(r"\n(?=\[\d+\])", section_text)
+    if len(chunks) < 2:
+        chunks = [c.strip() for c in re.split(r"\n\s*\n", section_text)
+                  if len(c.strip()) > 40]
+    refs: list[Reference] = []
+    for chunk in chunks:
+        text = re.sub(r"\s+", " ", chunk).strip()
+        if len(text) < 25:
+            continue
+        label = ""
+        m = re.match(r"(\[\d+\])\s*", text)
+        if m:
+            label, text_body = m.group(1), text[m.end():]
+        else:
+            text_body = text
+        sentences = [s.strip() for s in re.split(r"(?<=[.])\s+", text_body)
+                     if s.strip()]
+        title = sentences[1] if len(sentences) > 1 else ""
+        years = re.findall(r"\b(?:19|20)\d{2}\b", text)
+        url, kind = resolve_reference_url(text, title)
+        refs.append(Reference(text=text_body, title=title,
+                              authors=sentences[0] if sentences else "",
+                              year=years[-1] if years else "",
+                              label=label, url=url, url_kind=kind))
+    return refs
+
+
 def paper_from_text(text: str, *, title: str = "", source: str = "text",
                     source_id: str = "") -> Paper:
     text = text.replace("\r\n", "\n")
-    return Paper(title=title or _guess_title(text), text=text,
-                 abstract=_guess_abstract(text), source=source,
-                 source_id=source_id, sections=split_sections(text))
+    paper = Paper(title=title or _guess_title(text), text=text,
+                  abstract=_guess_abstract(text), source=source,
+                  source_id=source_id, sections=split_sections(text))
+    for s in paper.sections:
+        if s.title.strip().lower() == "references":
+            paper.references = parse_references_from_text(s.text)
+    return paper
 
 
 def extract_pdf_text(data: bytes) -> str:
@@ -113,12 +164,41 @@ class _ArxivHTMLParser(HTMLParser):
         self._fig: dict | None = None
         self._fig_depth = 0
         self._cap_buf: list[str] | None = None
+        self.references: list[Reference] = []
+        self._bib: dict | None = None
+        self._bib_buf: list[str] | None = None
+        self._bib_kind = ""  # block | label
+        self._bib_span_depth = 0
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
         if tag in ("script", "style", "nav", "header", "footer"):
             self._skip += 1
         if self._skip:
+            return
+        cls = a.get("class") or ""
+        if tag == "li" and "ltx_bibitem" in cls:
+            self._bib = {"blocks": [], "url": "", "label": ""}
+            return
+        if self._bib is not None:
+            if tag == "span" and self._bib_buf is not None:
+                self._bib_span_depth += 1  # nested span inside a bib block
+            elif tag == "span" and "ltx_bibblock" in cls:
+                self._bib_buf, self._bib_kind = [], "block"
+            elif tag == "span" and "ltx_tag_bibitem" in cls:
+                self._bib_buf, self._bib_kind = [], "label"
+            elif tag == "a":
+                href = a.get("href") or ""
+                if href.startswith("http") and not self._bib["url"]:
+                    self._bib["url"] = href
+            return
+        if "ltx_abstract" in (a.get("class") or ""):
+            # arXiv puts the abstract under the article title with no
+            # usable heading; it is the Abstract section, by name.
+            self._flush_para()
+            if not self.sections or self.sections[-1][0] != "Abstract":
+                self._heading = "Abstract"
+                self.sections.append(("Abstract", []))
             return
         if tag == "figure":
             if self._fig is None:
@@ -151,6 +231,33 @@ class _ArxivHTMLParser(HTMLParser):
             self._skip -= 1
             return
         if self._skip:
+            return
+        if tag == "span" and self._bib is not None and self._bib_buf is not None:
+            if self._bib_span_depth > 0:
+                self._bib_span_depth -= 1
+                return
+            text = re.sub(r"\s+", " ", "".join(self._bib_buf)).strip()
+            if self._bib_kind == "block" and text:
+                self._bib["blocks"].append(text)
+            elif self._bib_kind == "label" and text:
+                self._bib["label"] = text
+            self._bib_buf, self._bib_kind = None, ""
+            return
+        if tag == "li" and self._bib is not None:
+            bib, self._bib = self._bib, None
+            blocks = bib["blocks"]
+            full = " ".join(blocks).strip()
+            if full:
+                title = blocks[1] if len(blocks) > 1 else ""
+                years = re.findall(r"\b(?:19|20)\d{2}\b", full)
+                url, kind = resolve_reference_url(full, title, bib["url"])
+                self.references.append(Reference(
+                    text=full, title=title,
+                    authors=blocks[0] if blocks else "",
+                    year=years[-1] if years else "",
+                    label=bib["label"], url=url, url_kind=kind))
+            return
+        if self._bib is not None:
             return
         if tag == "figcaption" and self._cap_buf is not None:
             if self._fig is not None:
@@ -185,9 +292,11 @@ class _ArxivHTMLParser(HTMLParser):
             self._flush_para()
 
     def handle_data(self, data):
-        if self._cap_buf is not None:
+        if self._bib_buf is not None:
+            self._bib_buf.append(data)
+        elif self._cap_buf is not None:
             self._cap_buf.append(data)
-        elif not self._skip and self._mode:
+        elif not self._skip and self._mode and self._bib is None:
             self._buf.append(data)
 
     def _flush_para(self):
@@ -203,8 +312,35 @@ class _ArxivHTMLParser(HTMLParser):
         self.sections[-1][1].append(text)
 
 
-def parse_html_document(html_text: str,
-                        base_url: str = "") -> tuple[list[Section], list[Figure]]:
+def _norm_ws(s: str) -> str:
+    return re.sub(r"\s+", " ", s.lower()).strip()
+
+
+def normalize_sections(sections: list[Section],
+                       abstract: str = "") -> list[Section]:
+    """Drop non-sections and name the abstract correctly.
+
+    - 'Preamble' (title-page / licence text before the first heading)
+      is not a paper section and is removed.
+    - The abstract often sits under the article-title heading; if its
+      text matches the known abstract and no section is already called
+      Abstract, that section is renamed to 'Abstract'.
+    """
+    sections = [s for s in sections if s.title.lower() != "preamble"]
+    if abstract and not any(s.title.lower() == "abstract" for s in sections):
+        needle = _norm_ws(abstract)[:90]
+        if needle:
+            for s in sections:
+                if needle in _norm_ws(s.text):
+                    s.title = "Abstract"
+                    break
+    for i, s in enumerate(sections):
+        s.index = i
+    return sections
+
+
+def parse_html_document(html_text: str, base_url: str = "",
+                        abstract: str = "") -> tuple[list[Section], list[Figure]]:
     """Parse structured HTML into (sections, figures), in document order."""
     parser = _ArxivHTMLParser(base_url)
     try:
@@ -220,11 +356,34 @@ def parse_html_document(html_text: str,
             caps = [f.caption for f in parser.figures
                     if f.section_title == title and f.caption]
             body = " ".join(caps)
+        if not body.strip() and title.strip().lower() == "references":
+            body = "\n".join(r.text for r in parser.references)
         if body.strip():
             out.append(Section(title=title, text=body, index=i))
-    for i, s in enumerate(out):
-        s.index = i
-    return out, parser.figures
+    return normalize_sections(out, abstract), parser.figures
+
+
+def parse_html_parts(html_text: str, base_url: str = "",
+                     abstract: str = ""):
+    """(sections, figures, references) from a single parse pass."""
+    parser = _ArxivHTMLParser(base_url)
+    try:
+        parser.feed(html_text)
+    except Exception:  # noqa: BLE001
+        return [], [], []
+    out: list[Section] = []
+    for title, paras in parser.sections:
+        body = "\n\n".join(paras)
+        if not body.strip():
+            caps = [f.caption for f in parser.figures
+                    if f.section_title == title and f.caption]
+            body = " ".join(caps)
+        if not body.strip() and title.strip().lower() == "references":
+            body = "\n".join(r.text for r in parser.references)
+        if body.strip():
+            out.append(Section(title=title, text=body))
+    return (normalize_sections(out, abstract), parser.figures,
+            parser.references)
 
 
 def parse_arxiv_html(html_text: str, base_url: str = "") -> list[Section]:
@@ -261,16 +420,17 @@ def fetch_arxiv(arxiv_id: str, *, timeout: int = 30) -> Paper:
     # 1) HTML full text (keeps the paper's real section structure).
     for html_url in (f"https://arxiv.org/html/{aid}",):
         try:
-            sections, figures = parse_html_document(
+            sections, figures, references = parse_html_parts(
                 _get(html_url, timeout).decode("utf-8", "ignore"),
-                base_url=html_url)
+                base_url=html_url, abstract=abstract)
         except Exception:  # noqa: BLE001
-            sections, figures = [], []
+            sections, figures, references = [], [], []
         if len(sections) >= 3:
             text = "\n\n".join(f"{s.title}\n{s.text}" for s in sections)
             return Paper(title=title or aid, text=text, authors=authors,
                          abstract=abstract, source="arxiv", source_id=aid,
-                         sections=sections, figures=figures, complete=True)
+                         sections=sections, figures=figures,
+                         references=references, complete=True)
     # 2) PDF full text.
     try:
         paper = paper_from_pdf_bytes(_get(f"https://arxiv.org/pdf/{aid}", timeout),
@@ -295,11 +455,12 @@ def fetch_url_text(url: str, *, timeout: int = 30) -> Paper:
     if url.lower().endswith(".pdf") or data[:4] == b"%PDF":
         return paper_from_pdf_bytes(data, source_id=url)
     html = data.decode("utf-8", "ignore")
-    sections, figures = parse_html_document(html, base_url=url)
+    sections, figures, references = parse_html_parts(html, base_url=url)
     if len(sections) >= 2:  # structured HTML (arXiv HTML and similar)
         text = "\n\n".join(f"{s.title}\n{s.text}" for s in sections)
         paper = paper_from_text(text, source="url", source_id=url)
         paper.sections, paper.figures = sections, figures
+        paper.references = references
         return paper
     text = re.sub(r"<[^>]+>", " ", html)
     text = re.sub(r"\s+", " ", text)
