@@ -1,18 +1,14 @@
-"""ArXplain — explain a research paper at the reader's own level.
+"""ArXplain — a CLI tool that explains a research paper at your level.
 
-Multi-step agentic pipeline (ingest -> extract -> gap-analysis ->
-planner -> explainer -> quiz) over a provider-agnostic LLM layer.
-The primary interface is the CLI, writing a .md or .html explanation.
+This package is the CLI's implementation only; it is not a library and
+exposes no public Python API. The single entry point is the `arxplain`
+command (see `arxplain --help`), which writes an explanation file for
+the reader. Internal modules (ingestion, agents, pipeline, renderers)
+exist to serve that command and may change without notice.
 """
-from .models import (Dimension, ExplainResult, Level, Paper, Resource,
-                     Topic, UserProfile)
-from .pipeline import ArXplainPipeline, explain_paper
-from .profiler import ProfilerAgent
-
-__all__ = ["ArXplainPipeline", "Dimension", "ExplainResult", "Level",
-           "Paper", "ProfilerAgent", "Resource", "Topic", "UserProfile",
-           "explain_paper", "main"]
 __version__ = "0.1.0"
+
+__all__ = ["main"]
 
 
 def main(argv: list[str] | None = None) -> int:

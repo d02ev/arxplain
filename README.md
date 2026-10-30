@@ -120,25 +120,11 @@ arxplain explain paper.pdf --mathematics 1 --frameworks 3 --language advanced
 | Quiz | Diagnostic quiz (sets levels) + post-reading check (suggests level changes) |
 
 The agent trace (which agent did what, LLM usage) is backend metadata: it
-is printed in the terminal and available as `result.trace` / in
-`ExplainResult.to_dict()`, but it is **not** rendered into the `.md` /
-`.html` files the reader sees.
+is printed in the terminal and printed in the terminal, but it is **not** rendered into the
+`.html` file the reader sees.
 
-## Using it as a library
-
-```python
-from arxplain import UserProfile, Dimension, Level, explain_paper
-from arxplain.ingestion import fetch_arxiv
-
-profile = UserProfile(name="Ada", goal="implement this paper")
-profile.set_level(Dimension.MATHEMATICS, Level.BEGINNER)
-profile.set_level(Dimension.FRAMEWORKS, Level.ADVANCED)
-
-result = explain_paper(fetch_arxiv("1706.03762"), profile)
-print(result.summary)
-for step in result.plan.steps:
-    print(step.order, step.title, step.target_depth)
-```
+ArXplain is a CLI tool only — there is no library/Python API.
+Everything is done through the `arxplain` command shown above.
 
 ## Development
 
