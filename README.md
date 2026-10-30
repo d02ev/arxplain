@@ -59,9 +59,13 @@ If a key has been shared anywhere public, rotate it.
 
 ```bash
 # 1. Profiling: the paper is analyzed (LLM + web search) into topics,
-#    split into Hard Requirement vs Good To Know (Optional). You rate
-#    each one 1-10 (Hard first, Good-To-Know capped at 8) and the result
-#    is saved as a per-paper profile.json, with learning links attached.
+#    split into Hard Requirement vs Good To Know (Optional). For every
+#    topic the prompt shows the passage of THIS paper where it appears
+#    and a self-check question drawn from that passage (e.g. "Do you
+#    understand why the attention scores are divided by sqrt(d_k)?"),
+#    so you can judge yourself accurately before rating 1-10 (Hard
+#    first, Good-To-Know capped at 8). The result is saved as a
+#    per-paper profile.json, with learning links attached.
 arxplain profile-paper 1706.03762 --llm meta --save profile.json
 
 #    Non-interactive equivalent (scripting / testing):
@@ -85,7 +89,6 @@ is capped (`--max-searches 16`) and cached, like LLM calls.
 arxplain profile --save me.json        # dimension-level template (0=novice .. 4=expert)
 arxplain explain --demo --level beginner
 arxplain explain 1706.03762 --diagnose   # quiz sets coarse levels
-arxplain quiz 1706.03762 --profile me.json              # check understanding after
 ```
 
 Per-dimension flags work without a profile file too:
@@ -117,7 +120,7 @@ arxplain explain paper.pdf --mathematics 1 --frameworks 3 --language advanced
 | Explainer | Writes each background-topic explanation at the depth your gap implies; uses the configured LLM when present, heuristics offline |
 | Paper explainer | **Explains the paper itself, section by section**, adapted to your ratings, with Hard-Requirement links inline where you are weak (LLM rewrite in `--llm-mode quality`, extractive and free otherwise) |
 | Profiler | LLM + web search classify paper topics as Hard Requirement vs Good To Know; your 1–10 ratings become `profile.json` |
-| Quiz | Diagnostic quiz (sets levels) + post-reading check (suggests level changes) |
+| Quiz | Diagnostic quiz used by `diagnose`/`--diagnose` to set coarse levels |
 
 The agent trace (which agent did what, LLM usage) is backend metadata: it
 is printed in the terminal and printed in the terminal, but it is **not** rendered into the

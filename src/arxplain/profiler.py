@@ -47,6 +47,24 @@ def _parse_topic_items(raw: str) -> list[dict]:
     return items
 
 
+def find_context(text: str, name: str, *, window: int = 300) -> str:
+    """The passage of THIS paper where a topic appears (for the prompt)."""
+    low = text.lower()
+    phrase = name.lower().split(":")[0].strip()
+    idx = low.find(phrase) if len(phrase) >= 4 else -1
+    if idx < 0:
+        tokens = [w for w in re.findall(r"[a-z]{4,}", phrase)]
+        for w in tokens:
+            idx = low.find(w)
+            if idx >= 0:
+                break
+    if idx < 0:
+        return ""
+    start = max(0, idx - 70)
+    snippet = re.sub(r"\s+", " ", text[start:idx + window]).strip()
+    return ("…" + snippet) if start else snippet
+
+
 def heuristic_topics(paper: Paper) -> list[Topic]:
     topics: list[Topic] = []
     for c in paper.concepts:
@@ -56,7 +74,8 @@ def heuristic_topics(paper: Paper) -> list[Topic]:
             name=c.name, dimension=c.dimension,
             requirement="hard" if hard else "optional",
             why=c.description,
-            search_query=f"{c.name} explained tutorial"))
+            search_query=f"{c.name} explained tutorial",
+            paper_context=(c.evidence or "")[:320]))
     return _ordered(topics)
 
 
@@ -127,6 +146,56 @@ class ProfilerAgent:
                 search_query=f"{name} explained tutorial"))
         return _ordered(topics) or None
 
+    # -- paper context + self-check questions ------------------------------
+    def _add_contexts_and_checks(self, paper: Paper,
+                                 topics: list[Topic]) -> bool:
+        """Attach each topic's paper passage and a self-check question.
+
+        Returns True if the LLM wrote the questions. One batched call;
+        on mock/off/budget-exhaustion a template question is used so
+        the prompt is never bare.
+        """
+        for t in topics:
+            if not t.paper_context:
+                t.paper_context = find_context(paper.text, t.name)
+            t.self_check = (
+                f"Do you understand {t.name} as this paper uses it — "
+                "could you explain its role in the passage above?")
+        if isinstance(self.llm, MockLLM) or not topics:
+            return False
+        listing = "\n".join(
+            f"- {t.name}: {(t.paper_context or t.why)[:220]}" for t in topics)
+        prompt = (
+            "For each topic below, write ONE specific self-check question "
+            "starting with \"Do you understand\", based on how THIS paper "
+            "uses the topic in the quoted passage. Mention the concrete "
+            "notation, mechanism, dataset or decision from the passage "
+            "(e.g. \"Do you understand why the attention scores are "
+            "divided by sqrt(d_k) before the softmax?\"). Keep each "
+            "question under 30 words. Return ONLY a compact JSON array "
+            'like [{"n":"Topic name","q":"Do you understand ...?"}].\n'
+            + listing)
+        try:
+            raw = self.llm.complete(prompt, system=_SYSTEM, max_tokens=1800)
+        except Exception:  # noqa: BLE001 - templates above remain
+            return False
+        by_name: dict[str, str] = {}
+        for it in _parse_topic_items(raw or ""):
+            n = str(it.get("n") or it.get("name", "")).strip().lower()
+            q = str(it.get("q") or it.get("question", "")).strip()
+            if n and q:
+                by_name[n] = q
+        hit = 0
+        for t in topics:
+            q = by_name.get(t.name.lower())
+            if q is None:  # fuzzy: topic name contained in the returned name
+                q = next((v for k, v in by_name.items()
+                          if k in t.name.lower() or t.name.lower() in k), None)
+            if q:
+                t.self_check = q if q.endswith("?") else q + "?"
+                hit += 1
+        return hit > 0
+
     # -- main entry ---------------------------------------------------------
     def run(self, paper: Paper) -> tuple[list[Topic], list[AgentStep]]:
         trace: list[AgentStep] = []
@@ -159,12 +228,18 @@ class ProfilerAgent:
             known = {t.name.lower() for t in topics}
             topics = topics + [
                 Topic(name=t.name, dimension=t.dimension, requirement="optional",
-                      why=t.why, search_query=t.search_query)
+                      why=t.why, search_query=t.search_query,
+                      paper_context=t.paper_context)
                 for t in base if t.name.lower() not in known]
         hard = [t for t in topics if t.is_hard]
         optional = [t for t in topics if not t.is_hard][:self.max_optional]
         # Hard topics are never dropped by the cap; only Good-To-Know is.
         topics = _ordered(hard + optional)
+        llm_checks = self._add_contexts_and_checks(paper, topics)
+        trace.append(AgentStep(
+            "profiler", "write self-check questions from the paper",
+            "LLM questions grounded in each topic's passage"
+            if llm_checks else "template questions (LLM off/unavailable)"))
         # Resources now, hard first, so explaining later needs no new searches.
         if not isinstance(self.search, NoSearch):
             for t in topics:

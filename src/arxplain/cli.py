@@ -4,7 +4,7 @@
   arxplain explain paper.pdf --profile me.json -o out.html
   arxplain explain --demo --level beginner
   arxplain diagnose --save me.json
-  arxplain quiz 1706.03762 --profile me.json
+  arxplain profile-paper 1706.03762 --save profile.json
 """
 from __future__ import annotations
 
@@ -184,34 +184,7 @@ def cmd_explain(args) -> int:
           f"blocked={u.get('blocked', 0)} est_tokens={u.get('est_total_tokens', 0)}")
     print("Wrote : " + ", ".join(written))
     print("\nOpen the file above in your browser.")
-    if args.quiz:
-        _run_quiz(paper, profile, count=5)
     return 0
-
-
-def _run_quiz(paper: Paper, profile: UserProfile, *, count: int = 5) -> None:
-    quiz = QuizAgent()
-    if not paper.concepts:
-        from .extractor import extract_concepts
-        extract_concepts(paper)
-    questions = quiz.generate(paper, profile, count=count)
-    print("\n--- Check your understanding ---")
-    score = 0
-    for i, q in enumerate(questions, 1):
-        print(f"\n{i}. [{q.dimension.label}] {q.question}")
-        for j, opt in enumerate(q.options):
-            print(f"   {chr(97 + j)}) {opt}")
-        raw = input("Your answer (a/b/c/d): ").strip().lower()
-        idx = ord(raw) - 97 if raw else -1
-        picked = q.options[idx] if 0 <= idx < len(q.options) else ""
-        r = quiz.evaluate(q, picked, profile)
-        score += int(r.correct)
-        print(("  Correct. " if r.correct else "  Not quite. ") + r.feedback)
-        if r.suggested_level is not None:
-            print(f"  (Tip: your {q.dimension.label} level could move to "
-                  f"{Level.from_any(r.suggested_level).label} — re-run with "
-                  f"--{q.dimension.value} {r.suggested_level} for a different depth.)")
-    print(f"\nScore: {score}/{len(questions)}")
 
 
 def collect_ratings(topics: list[Topic], *, input_fn=input,
@@ -232,12 +205,21 @@ def collect_ratings(topics: list[Topic], *, input_fn=input,
         for t in topics:
             t.familiarity = max(1, min(10, int(default)))
         return topics
-    print("\nRate your familiarity with each topic from 1 (never seen it) "
-          "to 10 (could teach it). Press Enter to skip a topic.\n")
+    print("\nFor each topic you will see where THIS paper uses it and a "
+          "self-check question taken from that passage. Judge yourself "
+          "against the question, then rate your familiarity from 1 "
+          "(never seen it) to 10 (could teach it). Enter skips a topic.\n")
     for i, t in enumerate(topics, 1):
         tag = "HARD REQUIREMENT" if t.is_hard else "Good To Know (Optional)"
         print(f"{i}/{len(topics)}  [{tag}] {t.name}  ({t.dimension.label})")
-        if t.why:
+        if t.paper_context:
+            ctx = t.paper_context.strip()
+            if len(ctx) > 340:
+                ctx = ctx[:340].rsplit(" ", 1)[0] + "…"
+            print(f"    In this paper: \"{ctx}\"")
+        if t.self_check:
+            print(f"    Self-check: {t.self_check}")
+        elif t.why:
             print(f"    Why it matters: {t.why}")
         for _try in range(3):
             raw = input_fn("    Your familiarity (1-10, Enter to skip): ").strip()
@@ -308,13 +290,6 @@ def cmd_profile_paper(args) -> int:
     return 0
 
 
-def cmd_quiz(args) -> int:
-    paper = load_paper("--demo" if getattr(args, "demo", False) else args.paper)
-    profile = load_profile(args)
-    _run_quiz(paper, profile, count=args.count)
-    return 0
-
-
 def cmd_diagnose(args) -> int:
     profile = load_profile(args)
     profile = run_diagnose(profile)
@@ -380,19 +355,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="cap on resource searches at explain time (default 5)")
     ex.add_argument("--diagnose", action="store_true",
                     help="run the adaptive diagnostic quiz first")
-    ex.add_argument("--quiz", action="store_true",
-                    help="finish with a check-your-understanding quiz")
     _add_profile_args(ex)
     ex.set_defaults(fn=cmd_explain)
-
-    qz = sub.add_parser("quiz", help="quiz me on a paper at my level")
-    qz.add_argument("paper", nargs="?", default="--demo")
-    qz.add_argument("--demo", action="store_true",
-                    help="quiz on the bundled demo paper")
-    qz.add_argument("--count", type=int, default=5)
-    qz.add_argument("--llm", default=None)
-    _add_profile_args(qz)
-    qz.set_defaults(fn=cmd_quiz)
 
     dg = sub.add_parser("diagnose", help="adaptive quiz that builds your profile")
     dg.add_argument("--save", default=None, help="save the resulting profile JSON")
@@ -410,7 +374,9 @@ def build_parser() -> argparse.ArgumentParser:
     pp.add_argument("--name", default=None)
     pp.add_argument("--llm", default=None, help="mock|meta|openai|anthropic|ollama")
     pp.add_argument("--llm-mode", choices=["off", "economy", "quality"],
-                    default="economy", help="economy = 1 LLM classification call")
+                    default="economy",
+                    help="LLM topic classification + self-check questions "
+                         "(2 batched calls max, cached)")
     pp.add_argument("--max-llm-calls", type=int, default=None)
     pp.add_argument("--max-llm-concepts", type=int, default=8)
     pp.add_argument("--no-cache", action="store_true")

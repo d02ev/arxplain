@@ -163,6 +163,8 @@ class Topic:
     requirement: str = "hard"  # hard | optional  (Good To Know)
     why: str = ""
     search_query: str = ""
+    paper_context: str = ""  # passage from THIS paper where the topic appears
+    self_check: str = ""     # "Do you understand ...?" drawn from that passage
     familiarity: int | None = None  # user's 1-10 self-rating, None = unrated
     resources: list[Resource] = field(default_factory=list)
 
@@ -178,6 +180,8 @@ class Topic:
         return {"name": self.name, "dimension": self.dimension.value,
                 "requirement": self.requirement, "why": self.why,
                 "search_query": self.search_query,
+                "paper_context": self.paper_context,
+                "self_check": self.self_check,
                 "familiarity": self.familiarity,
                 "resources": [r.to_dict() for r in self.resources]}
 
@@ -190,6 +194,8 @@ class Topic:
         return cls(name=d.get("name", ""), dimension=dim,
                    requirement="optional" if d.get("requirement") == "optional" else "hard",
                    why=d.get("why", ""), search_query=d.get("search_query", ""),
+                   paper_context=d.get("paper_context", ""),
+                   self_check=d.get("self_check", ""),
                    familiarity=d.get("familiarity"),
                    resources=[Resource(**{k: r.get(k, "") for k in
                                           ("title", "url", "source", "snippet")})
