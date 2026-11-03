@@ -1,0 +1,230 @@
+{
+  "name": "Demo learner (ML student)",
+  "paper": {
+    "title": "Attention Is All You Need",
+    "source_id": "1706.03762"
+  },
+  "levels": {
+    "theory": 2,
+    "mathematics": 1,
+    "experimentation": 2,
+    "results": 1,
+    "assumptions": 0,
+    "limitations": 0,
+    "domain": 1
+  },
+  "level_labels": {
+    "theory": "Intermediate",
+    "mathematics": "Beginner",
+    "experimentation": "Intermediate",
+    "results": "Beginner",
+    "assumptions": "Novice",
+    "limitations": "Novice",
+    "domain": "Beginner"
+  },
+  "topics": [
+    {
+      "name": "Scaled dot-product attention & softmax",
+      "dimension": "mathematics",
+      "requirement": "hard",
+      "why": "The core operation of the paper: queries, keys and values combined with a scaled dot product and softmax.",
+      "search_query": "scaled dot product attention explained",
+      "paper_context": "",
+      "self_check": "",
+      "familiarity": 2,
+      "resources": []
+    },
+    {
+      "name": "Transformer architecture",
+      "dimension": "theory",
+      "requirement": "hard",
+      "why": "The model the paper proposes: encoder-decoder stacks of attention and feed-forward layers.",
+      "search_query": "transformer architecture explained",
+      "paper_context": "",
+      "self_check": "",
+      "familiarity": 3,
+      "resources": []
+    },
+    {
+      "name": "Complexity & scaling constraints",
+      "dimension": "limitations",
+      "requirement": "hard",
+      "why": "Attention cost grows quadratically with sequence length, which limits where the model applies.",
+      "search_query": "attention quadratic complexity sequence length",
+      "paper_context": "",
+      "self_check": "",
+      "familiarity": 2,
+      "resources": []
+    },
+    {
+      "name": "Sequence-to-sequence encoder-decoder framework",
+      "dimension": "theory",
+      "requirement": "hard",
+      "why": "The established framework this paper reworks; the demo learner already knows it well.",
+      "search_query": "sequence to sequence encoder decoder explained",
+      "paper_context": "",
+      "self_check": "",
+      "familiarity": 8,
+      "resources": []
+    },
+    {
+      "name": "Recurrent networks (LSTM/GRU)",
+      "dimension": "theory",
+      "requirement": "hard",
+      "why": "The previous state of the art the Transformer replaces; the demo learner's strongest area.",
+      "search_query": "LSTM GRU recurrent networks explained",
+      "paper_context": "",
+      "self_check": "",
+      "familiarity": 9,
+      "resources": []
+    },
+    {
+      "name": "Embeddings & representation learning",
+      "dimension": "theory",
+      "requirement": "hard",
+      "why": "Tokens enter the model as learned vectors; input and output embeddings are tied in this paper.",
+      "search_query": "word embeddings representation learning explained",
+      "paper_context": "",
+      "self_check": "",
+      "familiarity": 5,
+      "resources": []
+    },
+    {
+      "name": "Linear algebra (matrices & vectors)",
+      "dimension": "mathematics",
+      "requirement": "hard",
+      "why": "Attention is matrix multiplication throughout: QK^T, projections and feed-forward layers.",
+      "search_query": "linear algebra matrices vectors tutorial",
+      "paper_context": "",
+      "self_check": "",
+      "familiarity": 6,
+      "resources": []
+    },
+    {
+      "name": "Probability & distributions",
+      "dimension": "mathematics",
+      "requirement": "hard",
+      "why": "Softmax turns attention scores into probability distributions over positions.",
+      "search_query": "softmax probability distribution explained",
+      "paper_context": "",
+      "self_check": "",
+      "familiarity": 6,
+      "resources": []
+    },
+    {
+      "name": "Mathematical notation & equations",
+      "dimension": "mathematics",
+      "requirement": "hard",
+      "why": "Symbols like d_k, W^Q and multi-head concatenation carry the method's definition.",
+      "search_query": "multi head attention notation d_k explained",
+      "paper_context": "",
+      "self_check": "",
+      "familiarity": 4,
+      "resources": []
+    },
+    {
+      "name": "Main results & headline findings",
+      "dimension": "results",
+      "requirement": "hard",
+      "why": "BLEU gains on translation with far less training time than recurrent or convolutional models.",
+      "search_query": "attention is all you need results BLEU",
+      "paper_context": "",
+      "self_check": "",
+      "familiarity": 4,
+      "resources": []
+    },
+    {
+      "name": "Assumptions the method makes",
+      "dimension": "assumptions",
+      "requirement": "optional",
+      "why": "Attention assumes any position can attend to any other, so order must be injected explicitly.",
+      "search_query": "positional encoding why transformers need it",
+      "paper_context": "",
+      "self_check": "",
+      "familiarity": 3,
+      "resources": []
+    },
+    {
+      "name": "Baselines & ablation studies",
+      "dimension": "experimentation",
+      "requirement": "optional",
+      "why": "Comparisons and ablations show which components (heads, d_k, dropout) actually matter.",
+      "search_query": "ablation study baselines explained",
+      "paper_context": "",
+      "self_check": "",
+      "familiarity": 5,
+      "resources": []
+    },
+    {
+      "name": "Convolutional neural networks",
+      "dimension": "theory",
+      "requirement": "optional",
+      "why": "A competing sequence-modelling approach the paper compares against on cost and path length.",
+      "search_query": "convolutional neural networks explained",
+      "paper_context": "",
+      "self_check": "",
+      "familiarity": 7,
+      "resources": []
+    },
+    {
+      "name": "Data & compute constraints",
+      "dimension": "limitations",
+      "requirement": "optional",
+      "why": "Training used large corpora and multiple GPUs; results assume that scale of data and compute.",
+      "search_query": "transformer training compute requirements",
+      "paper_context": "",
+      "self_check": "",
+      "familiarity": 4,
+      "resources": []
+    },
+    {
+      "name": "Evaluation metrics: accuracy, precision, BLEU, perplexity",
+      "dimension": "experimentation",
+      "requirement": "optional",
+      "why": "BLEU and perplexity are how the paper scores translation quality and language modelling.",
+      "search_query": "BLEU score perplexity explained",
+      "paper_context": "",
+      "self_check": "",
+      "familiarity": 6,
+      "resources": []
+    },
+    {
+      "name": "Interpreting the results",
+      "dimension": "results",
+      "requirement": "optional",
+      "why": "Reading the tables: which gains come from the architecture versus training setup.",
+      "search_query": "how to read machine translation results tables",
+      "paper_context": "",
+      "self_check": "",
+      "familiarity": 4,
+      "resources": []
+    },
+    {
+      "name": "Normalization layers",
+      "dimension": "theory",
+      "requirement": "optional",
+      "why": "Residual connections and layer normalization wrap every sub-layer in the Transformer.",
+      "search_query": "layer normalization residual connections explained",
+      "paper_context": "",
+      "self_check": "",
+      "familiarity": 5,
+      "resources": []
+    },
+    {
+      "name": "Optimization theory",
+      "dimension": "mathematics",
+      "requirement": "optional",
+      "why": "Adam with warmup and decay schedules is how the model is actually trained.",
+      "search_query": "Adam optimizer learning rate warmup explained",
+      "paper_context": "",
+      "self_check": "",
+      "familiarity": 5,
+      "resources": []
+    }
+  ],
+  "interests": [
+    "deep learning",
+    "NLP"
+  ],
+  "goal": "understand the Transformer well enough to explain it to classmates"
+}
