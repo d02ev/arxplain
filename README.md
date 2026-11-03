@@ -4,8 +4,8 @@
 
 ArXplain is a multi-step agentic system. It reads a paper, works out what
 the paper assumes you already know — mathematics, experimentation,
-keywords & terminology, results, assumptions and limitations —
-domain knowledge and theory — compares that against *your* profile on
+results, assumptions and limitations, domain knowledge and theory —
+compares that against *your* profile on
 each of those dimensions, and then writes an explanation whose depth
 adapts dimension by dimension: from-zero with an analogy where you have
 a large gap, a guided pass where you are close, and a one-line recap

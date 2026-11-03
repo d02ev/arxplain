@@ -149,9 +149,11 @@ def extract_concepts(paper: Paper) -> list[Concept]:
                     dimension=Dimension.EXPERIMENTATION, required_level=1,
                     evidence=_evidence(text, r"hyperparameter|learning rate"),
                     description="Knobs that control training."))
-    # Keywords: frequent capitalised / quoted terms the paper defines.
+    # Terminology: frequent capitalised / quoted terms the paper
+    # defines. Terms are concepts, so they belong to theory — there is
+    # no separate keywords dimension.
     for term in sorted(set(re.findall(r'"([A-Z][A-Za-z\- ]{3,30})"', text)))[:6]:
-        add(Concept(name=term, dimension=Dimension.KEYWORDS, required_level=1,
+        add(Concept(name=term, dimension=Dimension.THEORY, required_level=1,
                     evidence=_evidence(text, re.escape(term)),
                     description=f"Term defined or emphasised by the paper: {term}."))
     paper.concepts = concepts

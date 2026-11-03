@@ -20,7 +20,6 @@ DEPTH_FOR_GAP = {0: "skip-known", 1: "concise"}
 ANALOGIES: dict[Dimension, str] = {
     Dimension.MATHEMATICS: "Think of it as a recipe: inputs go in, a rule transforms them, and the output tells you what to do next.",
     Dimension.EXPERIMENTATION: "Think of it as a taste-test: same recipe, different tweaks, then score which plate people prefer.",
-    Dimension.KEYWORDS: "Think of it as learning the local slang before visiting a new city.",
     Dimension.RESULTS: "Think of it as the scoreboard after the match: what actually happened, not what was hoped.",
     Dimension.ASSUMPTIONS: "Think of it as the fine print: things taken for granted before the argument starts.",
     Dimension.LIMITATIONS: "Think of it as the edge of the map: where this stops working and why.",
@@ -401,10 +400,6 @@ _QUIZ_TEMPLATES: dict[Dimension, tuple[str, list[str], int]] = {
                             ["Where or why the approach may break",
                              "How to install the code", "A new theorem",
                              "A dataset split"], 0),
-    Dimension.KEYWORDS: ("What does '{c}' mean in this paper's context?",
-                         ["A key term the paper defines or relies on",
-                          "An unrelated buzzword", "A typo",
-                          "A reference to another paper's title"], 0),
     Dimension.THEORY: ("What best captures '{c}'?",
                        ["A foundational idea the method builds on",
                         "A software tool", "A dataset split",

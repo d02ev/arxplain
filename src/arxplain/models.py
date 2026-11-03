@@ -14,8 +14,11 @@ class Dimension(str, Enum):
     Frameworks / programming languages / tools are deliberately NOT
     dimensions: most papers present a strategy or algorithm that is
     independent of any implementation. Such mentions are demoted to a
-    single experimental-setup note (see extractor). Old profiles that
-    still carry the removed keys are ignored on load.
+    single experimental-setup note (see extractor). Keywords /
+    terminology is not a dimension either: vocabulary is specific to
+    each paper, so terms are rated and explained per topic, not as a
+    global level. Old profiles that still carry the removed keys are
+    ignored on load.
     """
 
     THEORY = "theory"                # core idea: strategy / algorithm / approach
@@ -24,7 +27,6 @@ class Dimension(str, Enum):
     RESULTS = "results"              # what the experiments actually showed
     ASSUMPTIONS = "assumptions"      # assumptions & considerations made
     LIMITATIONS = "limitations"      # constraints, costs, failure cases
-    KEYWORDS = "keywords"            # terminology / vocabulary of the field
     DOMAIN = "domain"                # subject-matter knowledge
 
     @property
@@ -36,7 +38,6 @@ class Dimension(str, Enum):
             "results": "Results & Interpretation",
             "assumptions": "Assumptions & Considerations",
             "limitations": "Constraints & Limitations",
-            "keywords": "Keywords & Terminology",
             "domain": "Domain Knowledge",
         }[self.value]
 
@@ -179,10 +180,14 @@ class Paper:
                 f"than supported {PAPER_SCHEMA_VERSION}")
         concepts = []
         for c in doc.get("concepts") or []:
+            raw_dim = str(c.get("dimension", "theory")).lower()
             try:
-                dim = Dimension(str(c.get("dimension", "theory")).lower())
+                dim = Dimension(raw_dim)
             except Exception:
-                dim = Dimension.EXPERIMENTATION
+                # "keywords" terms are concepts (theory); removed tooling
+                # dimensions were experimental setup.
+                dim = (Dimension.THEORY if raw_dim == "keywords"
+                       else Dimension.EXPERIMENTATION)
             concepts.append(Concept(
                 name=c.get("name", ""), dimension=dim,
                 description=c.get("description", ""),
@@ -271,13 +276,16 @@ class Topic:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "Topic":
+        raw_dim = str(d.get("dimension", "theory")).lower()
         try:
-            dim = Dimension(str(d.get("dimension", "theory")).lower())
+            dim = Dimension(raw_dim)
         except Exception:
-            # Profiles written before frameworks/language/tools were
-            # removed: such topics were implementation details, i.e.
-            # experimental setup, not core ideas.
-            dim = Dimension.EXPERIMENTATION
+            # Profiles written before dimensions were removed:
+            # "keywords" topics were terminology, i.e. concepts (theory);
+            # frameworks/language/tools topics were implementation
+            # details, i.e. experimental setup, not core ideas.
+            dim = (Dimension.THEORY if raw_dim == "keywords"
+                   else Dimension.EXPERIMENTATION)
         return cls(name=d.get("name", ""), dimension=dim,
                    requirement="optional" if d.get("requirement") == "optional" else "hard",
                    why=d.get("why", ""), search_query=d.get("search_query", ""),
